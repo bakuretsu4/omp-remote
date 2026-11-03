@@ -31,21 +31,15 @@ class HostToolResult private constructor(
 }
 
 /**
- * Seam for "phone as agent tools" (docs/PROTOCOL.md §6.6). `HostConnection` routes every `hosttool.call` here
- * and answers with the returned result. Wave 2 provides real implementations (location, clipboard, notify, camera).
+ * "Phone as agent tools" (docs/PROTOCOL.md §6.6). `HostConnection` routes every `hosttool.call` here and answers with the
+ * returned result. The implementation is `app.ompr.tools.PhoneToolHandler`.
  */
 interface HostToolHandler {
     /** Device capabilities advertised in HELLO (`location|clipboard|notify|camera|voice`). Empty = none. */
-    val supportedCaps: List<String> get() = emptyList()
+    suspend fun supportedCaps(): List<String>
 
     suspend fun call(conn: HostConnection, call: HostEvent.HostToolCall): HostToolResult
 
     /** The bridge gave up on a call (timeout / session closed). Cooperative; the coroutine is cancelled as well. */
     fun cancel(callId: String) {}
-}
-
-/** Default until wave 2: every phone tool answers with an error so the agent is never left hanging. */
-object DisabledHostToolHandler : HostToolHandler {
-    override suspend fun call(conn: HostConnection, call: HostEvent.HostToolCall): HostToolResult =
-        HostToolResult.failure("Phone tools are not enabled on this device")
 }

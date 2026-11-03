@@ -75,6 +75,11 @@ consider shipping `wss://` only. Android allows cleartext only for private IP li
 
 **Lock-screen content.** Do not put approval text in a notification shown on the lock screen without the user opting in (`UNNotificationContent` with a generic body, details inside the app).
 
+**Phone tools (optional, spec §6.6).** Skip them for a first release: a client that advertises no capabilities in HELLO simply never receives a `hosttool.call`. If you add them,
+keep the Android policy (see `android/README.md`): every tool Off by default, a per-call confirmation mode, a cool-down after a refusal, and images shrunk to fit one 512 KiB frame.
+The natural iOS pieces are CoreLocation, `UIPasteboard`, `UNUserNotificationCenter` and the camera; iOS limits background access and may prompt on pasteboard reads, so expect the same
+"the app must be open" behaviour the Android app has (a notification that brings the user to the app).
+
 ## 6. Pitfalls found while building the Android client
 
 - **Tolerate the unknown.** New event kinds, content-block types and fields are added over time (§8). Unknown values must be ignored, not fatal. Timestamps and `lastActivity` may arrive as floating-point numbers.

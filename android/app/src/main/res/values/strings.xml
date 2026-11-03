@@ -18,6 +18,14 @@
     <string name="channel_limit_desc">A provider usage limit was hit</string>
     <string name="channel_connection">Connection</string>
     <string name="channel_connection_desc">Shown while the app stays connected to your PC</string>
+    <string name="channel_tool_request">Phone tool requests</string>
+    <string name="channel_tool_request_desc">An agent is waiting for you to open the app so it can use your phone</string>
+    <string name="channel_agent_message">Agent messages</string>
+    <string name="channel_agent_message_desc">Notifications an agent sends you through your phone</string>
+    <string name="tool_waiting_public">The agent needs your phone</string>
+    <string name="tool_waiting_title">The agent wants to %1$s</string>
+    <string name="tool_waiting_text">Tap to review · %1$s</string>
+    <string name="agent_message_public">Message from the agent</string>
 
     <string name="attn_approval">Approval needed</string>
     <string name="attn_question">Question</string>

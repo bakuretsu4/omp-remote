@@ -172,6 +172,14 @@ class HostConnection(
         kick.trySend(Unit)
     }
 
+    /**
+     * Drops the live channel so the loop reconnects and re-handshakes. Used when the capabilities this phone advertises
+     * change (a phone tool was switched on or off), because the bridge only learns them from HELLO.
+     */
+    fun forceReconnect() {
+        channel?.close()
+    }
+
     // ───────────────────────── connection loop ─────────────────────────
 
     private suspend fun runLoop() {
@@ -190,7 +198,7 @@ class HostConnection(
                     _state.value = ConnState.Connecting(attempt, url)
                     val link = RelayLink.open(client, url, rec.roomId)
                     try {
-                        SecureChannel.handshake(link, rec, deviceLabel, hostTools.supportedCaps)
+                        SecureChannel.handshake(link, rec, deviceLabel, hostTools.supportedCaps())
                     } catch (e: Throwable) {
                         link.cancel()
                         throw e

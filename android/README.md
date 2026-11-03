@@ -19,10 +19,11 @@ vector (keys, AAD, framed payloads, hostId, roomId). Re-copy it when the protoco
 | Package | What |
 |---|---|
 | `crypto/` | P-256 ECDH, HKDF-SHA256, AES-256-GCM (`Crypto`), Keystore-wrapped secrets (`KeystoreSecretBox`) |
-| `net/` | relay socket (`Relay`), handshake + framing (`SecureChannel`), pairing, per-host connection with reconnect/ping/request correlation (`HostConnection`), session subscriptions (`SessionStore`), typed ops (`HostApi`), `HostToolHandler` seam for wave 2 |
+| `net/` | relay socket (`Relay`), handshake + framing (`SecureChannel`), pairing, per-host connection with reconnect/ping/request correlation (`HostConnection`), session subscriptions (`SessionStore`), typed ops (`HostApi`), the `HostToolHandler` seam |
 | `data/` | protocol models, host store (secrets wrapped by Android Keystore), settings, `SessionReducer` |
 | `service/` | foreground `ConnectionService` ("Keep connected"), notifications, FCM `PushService` |
 | `security/` | optional biometric gate (app open + approvals) |
+| `tools/` | phone-as-agent-tools: `PhoneToolHandler` (policy, consent, budgets), `DeviceTools` (location, clipboard, notification, camera), `ToolRuntime` (confirmation requests + the on-screen activity) |
 | `ui/` | Compose screens: hosts/pairing, dashboard, session, new-session wizard, settings |
 
 ## Key storage
@@ -48,6 +49,28 @@ they would break background (push / foreground-service) connections.
   reason adds the warning to treat the link as compromised.
 * Malformed percent escapes in a link are a `ParseException`, not a crash. Pairing links are handed to the pair screen
   through `AppGraph.pairInbox` instead of the nav route, so names containing `%`/`+` are never decoded twice.
+
+## Phone tools (docs/PROTOCOL.md §6.6)
+
+A session started with "Let the agent use my phone" can call `phone_location`, `phone_clipboard_get`, `phone_clipboard_set`,
+`phone_notify` and `phone_camera_photo`. Because an agent that reads untrusted content could be tricked into calling any of
+them, **every tool is Off** until the user picks a mode in Settings → Phone tools:
+
+| Mode | Behaviour |
+|---|---|
+| Off | the call is refused with an error. A capability group is advertised only while at least one of its tools is on, so a tool that is Off can still be visible to the agent when its sibling (e.g. clipboard read vs write) is on; the call is still refused |
+| Ask each time | a confirmation dialog for every call (honours the biometric lock); denying starts a 60 s cool-down for that tool |
+| Always allow | runs without asking (choosing it needs the biometric lock when that is on). Notifications have no Ask mode |
+
+* Advertised capabilities (`location|clipboard|notify|camera`) follow the switches. Changing one makes the app re-handshake,
+  because the bridge only learns them from HELLO.
+* Android only lets the focused app read the clipboard, get a location fix reliably or take a photo. Such a call waits for
+  the user to open the app and posts a "the agent wants to …" notification (generic text on the lock screen); it has a
+  55 s budget, under the bridge's 60 s timeout.
+* Location uses the platform `LocationManager` (no Google Play Services). The camera opens the system camera app; the
+  photo is shrunk to ≤ 300 KB because `hosttool.result` must fit one 512 KiB frame.
+* `phone_notify` is limited to 10 per minute; clipboard text to 20,000 characters.
+* Android's `CAMERA` permission is declared (for the QR scanner), so the system camera path asks for it at first use.
 
 ## Connection robustness
 

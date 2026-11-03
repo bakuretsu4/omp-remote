@@ -52,6 +52,9 @@ import app.ompr.BuildConfig
 import app.ompr.data.ApprovalModes
 import app.ompr.data.AttentionKinds
 import app.ompr.data.DeviceEntry
+import app.ompr.data.PhoneToolSpec
+import app.ompr.data.PhoneTools
+import app.ompr.data.ToolMode
 import app.ompr.net.ConnState
 import app.ompr.net.RelayUrls
 import app.ompr.net.devicesList
@@ -84,6 +87,31 @@ private fun SwitchRow(title: String, subtitle: String?, checked: Boolean, enable
         }
         Spacer(Modifier.size(12.dp))
         Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+    }
+}
+
+@Composable
+private fun ToolModeRow(spec: PhoneToolSpec, mode: ToolMode, onChange: (ToolMode) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(spec.title, style = MaterialTheme.typography.bodyLarge)
+        Text(spec.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (m in spec.allowedModes) {
+                androidx.compose.material3.FilterChip(
+                    selected = mode == m,
+                    onClick = { onChange(m) },
+                    label = {
+                        Text(
+                            when (m) {
+                                ToolMode.OFF -> "Off"
+                                ToolMode.ASK -> "Ask each time"
+                                ToolMode.ALLOW -> "Always allow"
+                            },
+                        )
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -146,6 +174,23 @@ fun SettingsScreen(onBack: () -> Unit, onHostSettings: (String) -> Unit) {
                     },
                     null, on,
                 ) { v -> scope.launch { settings.setNotifyEnabled(kind, v) } }
+            }
+
+            SectionTitle("Phone tools")
+            Text(
+                "Let an agent use your phone. Every tool is off until you choose, and only sessions you start with “Let the agent use my phone” can call them. " +
+                    "“Ask each time” confirms every call. Clipboard reading, location and the camera work only while this app is open; if the agent asks while it is closed you get a notification to tap.",
+                Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            for (spec in PhoneTools.all) {
+                val mode by settings.hostToolMode(spec.id).collectAsState(ToolMode.OFF)
+                ToolModeRow(spec, mode) { m ->
+                    scope.launch {
+                        // Making a tool permanent needs the same authentication as the biometric lock, so a borrowed phone cannot grant it.
+                        if (m == ToolMode.ALLOW && !graph.gate.guard(activity, "Always allow ${spec.title}")) return@launch
+                        settings.setHostToolMode(spec.id, m)
+                    }
+                }
             }
 
             SectionTitle("New sessions")

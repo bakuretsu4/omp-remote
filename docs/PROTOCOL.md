@@ -187,9 +187,16 @@ smaller than the upload. Prompts carry `attachments:[{ref}]` (≤ 8). File attac
 The app advertises `caps` in HELLO (`location`, `clipboard`, `notify`, `camera`, `voice`). For managed sessions
 with `hostTools:true`, the bridge registers `phone_*` host tools via `set_host_tools` while at least one capable
 device is connected. A `host_tool_call` becomes a `hev` `hosttool.call {callId, sid, tool, args}` to that device.
-The device answers `hosttool.result`. Unanswered after 60 s, the bridge returns an error result to omp.
+The device answers `hosttool.result {callId, ok, content?, error?}`; `content` is a list of `{type:"text",text}` and
+`{type:"image",data(base64),mimeType}`, and `ok:false` with an `error` string is how a device refuses. Unanswered after
+60 s, the bridge returns an error result to omp. The whole `hosttool.result` request must fit one frame (512 KiB
+plaintext), so a device shrinks images (the Android app targets ≤ 300 KB).
 Tools: `phone_location`, `phone_clipboard_get`, `phone_clipboard_set`, `phone_notify`, `phone_camera_photo`.
-Every tool needs a per-tool on-device toggle (default off) and runtime permission. The user can refuse.
+Every tool needs a per-tool on-device switch (default off) and runtime permission, and the user can refuse. A device
+advertises a capability only while at least one of its tools is enabled, and re-handshakes when that changes.
+omp treats host tools as `exec`-tier, so in any approval mode that prompts for exec, each call first raises the normal
+approval request (`ui.request` kind `approval`) and only runs once it is approved. The phone answers that like any other
+approval; it is separate from the device's own per-call confirmation.
 
 ### 6.7 Voice
 `live.connect {sid, sdpOffer, voice?, instructions?}` → `{sdpAnswer, voice}` passes straight to omp `live_connect`.

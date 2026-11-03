@@ -1,14 +1,24 @@
 package app.ompr.service
 
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * What the user is looking at right now. Used to suppress notifications for the session that is on screen.
- * The session screen calls [enterSession] / [leaveSession]; the process lifecycle observer toggles [appVisible].
+ * What the user is looking at right now. Used to suppress notifications for the session that is on screen and to let
+ * phone tools wait until the app is open. The session screen calls [enterSession] / [leaveSession]; the process
+ * lifecycle observer toggles [appVisible].
  */
 class Presence {
-    @Volatile
-    var appVisible: Boolean = false
+    private val _visible = MutableStateFlow(false)
+    val visible: StateFlow<Boolean> = _visible.asStateFlow()
+
+    var appVisible: Boolean
+        get() = _visible.value
+        set(v) {
+            _visible.value = v
+        }
 
     private val current = AtomicReference<Pair<String, String>?>(null)
 

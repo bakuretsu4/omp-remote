@@ -38,6 +38,8 @@ class Notifier(private val context: Context, private val settings: SettingsStore
         ch(CH_ERROR, context.getString(R.string.channel_error), context.getString(R.string.channel_error_desc), NotificationManager.IMPORTANCE_DEFAULT)
         ch(CH_LIMIT, context.getString(R.string.channel_limit), context.getString(R.string.channel_limit_desc), NotificationManager.IMPORTANCE_DEFAULT)
         ch(CH_CONNECTION, context.getString(R.string.channel_connection), context.getString(R.string.channel_connection_desc), NotificationManager.IMPORTANCE_MIN)
+        ch(CH_TOOL_REQUEST, context.getString(R.string.channel_tool_request), context.getString(R.string.channel_tool_request_desc), NotificationManager.IMPORTANCE_HIGH)
+        ch(CH_AGENT_MESSAGE, context.getString(R.string.channel_agent_message), context.getString(R.string.channel_agent_message_desc), NotificationManager.IMPORTANCE_DEFAULT)
     }
 
     fun channelFor(kind: String): String = when (kind) {
@@ -154,6 +156,63 @@ class Notifier(private val context: Context, private val settings: SettingsStore
         runCatching { nm.notify(ConnectionService.NOTIFICATION_ID, foregroundNotification(text)) }
     }
 
+    private val agentSeq = java.util.concurrent.atomic.AtomicInteger()
+
+    private fun openAppIntent(requestCode: Int): PendingIntent = PendingIntent.getActivity(
+        context, requestCode,
+        Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP },
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    /**
+     * A phone tool needs the app on screen (camera, clipboard, location) or the user's confirmation, but the app is in the
+     * background. Tapping it opens the app, where the pending question or tool call is picked up. The lock-screen version is generic.
+     */
+    fun showToolWaiting(action: String, hostName: String) {
+        if (!canPost()) return
+        val redacted = NotificationCompat.Builder(context, CH_TOOL_REQUEST)
+            .setSmallIcon(R.drawable.ic_stat_ompr)
+            .setContentTitle(context.getString(R.string.tool_waiting_public))
+            .build()
+        val n = NotificationCompat.Builder(context, CH_TOOL_REQUEST)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(redacted)
+            .setSmallIcon(R.drawable.ic_stat_ompr)
+            .setContentTitle(context.getString(R.string.tool_waiting_title, action))
+            .setContentText(context.getString(R.string.tool_waiting_text, hostName))
+            .setContentIntent(openAppIntent(3))
+            .setAutoCancel(true)
+            .setTimeoutAfter(TOOL_WAIT_MS)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        runCatching { nm.notify(TOOL_WAITING_TAG, 2, n) }
+    }
+
+    fun cancelToolWaiting() {
+        nm.cancel(TOOL_WAITING_TAG, 2)
+    }
+
+    /** `phone_notify`: a message the agent wants the user to see. Returns false when it could not be posted. */
+    fun showAgentMessage(title: String, message: String): Boolean {
+        if (!canPost()) return false
+        val redacted = NotificationCompat.Builder(context, CH_AGENT_MESSAGE)
+            .setSmallIcon(R.drawable.ic_stat_ompr)
+            .setContentTitle(context.getString(R.string.agent_message_public))
+            .build()
+        val n = NotificationCompat.Builder(context, CH_AGENT_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(redacted)
+            .setSmallIcon(R.drawable.ic_stat_ompr)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setContentIntent(openAppIntent(4))
+            .setAutoCancel(true)
+            .build()
+        return runCatching { nm.notify("agent", agentSeq.incrementAndGet(), n) }.isSuccess
+    }
+
     companion object {
         const val CH_APPROVAL = "attention_approval"
         const val CH_QUESTION = "attention_question"
@@ -161,5 +220,9 @@ class Notifier(private val context: Context, private val settings: SettingsStore
         const val CH_ERROR = "attention_error"
         const val CH_LIMIT = "attention_limit"
         const val CH_CONNECTION = "connection"
+        const val CH_TOOL_REQUEST = "tool_request"
+        const val CH_AGENT_MESSAGE = "agent_message"
+        private const val TOOL_WAITING_TAG = "tool_waiting"
+        private const val TOOL_WAIT_MS = 60_000L
     }
 }

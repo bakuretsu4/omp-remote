@@ -22,7 +22,7 @@ class SettingsStore(context: Context) {
     private fun notifyKey(kind: String) = booleanPreferencesKey("notify_$kind")
     private fun lastSeenKey(hostId: String) = longPreferencesKey("attn_last_seen_$hostId")
     private fun pushRegKey(hostId: String) = stringPreferencesKey("push_reg_$hostId")
-    private fun hostToolKey(tool: String) = booleanPreferencesKey("hosttool_$tool")
+    private fun hostToolKey(tool: String) = stringPreferencesKey("hosttool_mode_$tool")
 
     val keepConnected: Flow<Boolean> = store.data.map { it[keepConnectedKey] ?: false }
     val biometricLock: Flow<Boolean> = store.data.map { it[biometricKey] ?: false }
@@ -58,9 +58,12 @@ class SettingsStore(context: Context) {
         if (token == null) it.remove(pushRegKey(hostId)) else it[pushRegKey(hostId)] = token
     }.let { }
 
-    /** Per-tool on-device toggle for phone tools (wave 2; default off). */
-    fun hostToolEnabled(tool: String): Flow<Boolean> = store.data.map { it[hostToolKey(tool)] ?: false }
-    suspend fun setHostToolEnabled(tool: String, v: Boolean) = store.edit { it[hostToolKey(tool)] = v }.let { }
+    /** Per-tool mode for phone tools (Off / Ask / Allow). Every tool is Off until the user chooses. */
+    fun hostToolMode(tool: String): Flow<ToolMode> = store.data.map { ToolMode.parse(it[hostToolKey(tool)]) }
+    val hostToolModes: Flow<Map<String, ToolMode>> =
+        store.data.map { p -> PhoneTools.all.associate { it.id to ToolMode.parse(p[hostToolKey(it.id)]) } }
+    suspend fun getHostToolMode(tool: String): ToolMode = hostToolMode(tool).first()
+    suspend fun setHostToolMode(tool: String, mode: ToolMode) = store.edit { it[hostToolKey(tool)] = mode.id }.let { }
 
     suspend fun clearHost(hostId: String) = store.edit {
         it.remove(lastSeenKey(hostId))

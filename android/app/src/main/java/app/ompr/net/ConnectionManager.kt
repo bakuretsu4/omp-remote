@@ -66,6 +66,11 @@ class ConnectionManager(
         scope.launch { settings.clearHost(hostId) }
     }
 
+    /** Re-handshake every live connection (the advertised phone capabilities changed). */
+    fun reconnectAll() {
+        for (c in conns.values) c.forceReconnect()
+    }
+
     private fun hostName(hostId: String): String = repo.get(hostId)?.name ?: "PC"
 
     private fun attach(conn: HostConnection) {
