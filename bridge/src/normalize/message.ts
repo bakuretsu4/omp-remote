@@ -89,7 +89,12 @@ export function shrinkArguments(value: unknown, depth = 0): unknown {
 	return value;
 }
 
-function resolveOmpBlob(ref: string, mimeType: string): { bytes: Uint8Array; mimeType: string } | undefined {
+/**
+ * Resolves a persisted `blob:sha256:<hex>` image reference from omp's content-addressed blob directory
+ * (`$PI_CODING_AGENT_DIR` or `~/.omp/agent`). Only a full lowercase 64-hex digest is accepted, so a reference can never
+ * name a path outside `<dir>/blobs/`. Returns undefined when the reference is malformed or the blob is gone.
+ */
+export function resolveOmpBlob(ref: string, mimeType: string): { bytes: Uint8Array; mimeType: string } | undefined {
 	const m = /^blob:sha256:([0-9a-f]{64})$/.exec(ref);
 	if (!m) return undefined;
 	const dir = process.env.PI_CODING_AGENT_DIR || join(homedir(), ".omp", "agent");

@@ -2,9 +2,8 @@
  * ManagedBackend: one `omp --mode rpc-ui` child process per session (PROTOCOL.md §6.1).
  * Translates omp RPC frames to normalized `SessionEvent`s and protocol ops to RPC commands.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
-import { homedir } from "node:os";
 import type {
 	ApprovalMode, Cap, GoalState, Message, ModelRef, Ops, PromptArgs, QueueState, SessionEvent, SessionSnapshot,
 	SessionState, SessionStatus, SessionSummary, SubagentInfo, ThinkingLevel, TodoPhase, UiAnswer, UiRequest,
@@ -15,7 +14,7 @@ import type {
 import { OpError, busy, invalid, sessionClosed } from "../errors.ts";
 import { isRecord } from "../guards.ts";
 import type { HostToolHost } from "../hosttools.ts";
-import { normalizeMessage, shrinkArguments, toolOutput, truncateUtf8 } from "../normalize/message.ts";
+import { normalizeMessage, resolveOmpBlob, shrinkArguments, toolOutput, truncateUtf8 } from "../normalize/message.ts";
 import { normalizeUiRequest, uiAnswerToResponse } from "../normalize/ui.ts";
 import {
 	activeBranch, clip, mapGoal, mapModel, mapModelListing, mapSubagent, mapThinking, mapTodos,
@@ -58,21 +57,6 @@ const MANAGED_CAPS: Cap[] = [
 type Listener<T> = (v: T) => void;
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
-
-function agentDir(): string {
-	return process.env.PI_CODING_AGENT_DIR || join(homedir(), ".omp", "agent");
-}
-
-/** Resolves persisted `blob:sha256:<hex>` image references from omp's content-addressed blob dir. */
-function resolveOmpBlob(ref: string, mimeType: string): { bytes: Uint8Array; mimeType: string } | undefined {
-	const m = /^blob:sha256:([0-9a-f]{64})$/.exec(ref);
-	if (!m) return undefined;
-	try {
-		return { bytes: readFileSync(join(agentDir(), "blobs", m[1]!)), mimeType };
-	} catch {
-		return undefined;
-	}
-}
 
 interface StreamEntry {
 	raw: unknown;

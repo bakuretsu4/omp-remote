@@ -76,6 +76,7 @@ State lives in `$OMPR_HOME` (default `~/.config/ompr`): directory `0700`, files 
   "fcm": { "serviceAccountPath": "/path/to/firebase-service-account.json" }, // optional, see Push
   "maxManagedSessions": 16,
   "tui": { "enabled": true, "control": false } // attach to live TUI sessions; control=false uses read-only (--view) links
+}
 ```
 
 Unknown or mistyped keys fail loudly at start. The bridge always passes `--approval-mode` explicitly; the phone chooses it
@@ -124,7 +125,7 @@ the bridge sends one content-free FCM data message `{"w":"1","h":"<hostId>"}` to
   The AAD carries direction, so reflected frames fail. Frames are limited to 512 KiB plaintext.
 - Pairing links (`v=2`) carry the derived `roomId` (never `roomSecret`), live in memory for 10 minutes, and are single-use.
   Both sides display a 6-digit code (`sasOf(pt, dpk, bpk)`) that binds the device public key to the prompt, so an observer who
-  photographed the QR cannot substitute their own key undetected. Unauthenticated or malformed frames never burn the token.
+  photographed the QR cannot substitute their own key undetected. Unauthenticated or malformed frames never burn the token and get no reply.
 - By default `allowedApprovalModes` excludes `yolo`, so a compromised phone cannot silently switch a session to approval-free
   execution unless you explicitly add `"yolo"` to `config.json`.
 - Known scope boundaries: all paired devices share one privilege tier; the relay host seat is unauthenticated (a party who learns

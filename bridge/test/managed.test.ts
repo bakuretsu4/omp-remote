@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
-import { chmodSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { SessionEvent } from "../../protocol/src/index.ts";
 import { ManagedBackend } from "../src/managed/backend.ts";
 import { RpcFrameDecoder } from "../src/managed/rpc.ts";
 import { createBlobStore } from "../src/normalize/blobs.ts";
-import { normalizeMessage, normalizeUiRequest, truncateUtf8, uiAnswerToResponse, TOOL_OUTPUT_LIMIT } from "../src/normalize/message.ts";
+import { normalizeMessage, normalizeUiRequest, resolveOmpBlob, truncateUtf8, uiAnswerToResponse, TOOL_OUTPUT_LIMIT } from "../src/normalize/message.ts";
 
 const FAKE = fileURLToPath(new URL("../fixtures/fake-omp.mjs", import.meta.url));
 chmodSync(FAKE, 0o755);
@@ -169,6 +172,59 @@ describe("normalization", () => {
 			assert.equal(Buffer.from(blobs.get(img.ref)!.bytes).toString(), "png-bytes");
 		}
 		assert.ok(!JSON.stringify(m).includes(data));
+	});
+
+	it("shows a persisted tool-result image from omp's blob store", () => {
+		const dir = mkdtempSync(join(tmpdir(), "ompr-blobs-"));
+		const saved = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = dir;
+		try {
+			const bytes = Buffer.from("fake-png-bytes");
+			const hex = createHash("sha256").update(bytes).digest("hex");
+			mkdirSync(join(dir, "blobs"));
+			writeFileSync(join(dir, "blobs", hex), bytes);
+			const blobs = createBlobStore();
+			const m = normalizeMessage({
+				role: "toolResult", toolCallId: "c1", toolName: "read", timestamp: 1,
+				content: [{ type: "text", text: "Read image" }, { type: "image", mimeType: "image/png", data: `blob:sha256:${hex}` }],
+			}, { blobs, id: "t1" })!;
+			assert.equal(m.role, "toolResult");
+			assert.equal(m.toolCallId, "c1");
+			const img = m.content[1]!;
+			assert.equal(img.type, "image");
+			if (img.type === "image") assert.equal(Buffer.from(blobs.get(img.ref)!.bytes).toString(), "fake-png-bytes");
+		} finally {
+			if (saved === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = saved;
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("never resolves a blob reference outside omp's blob directory", () => {
+		const dir = mkdtempSync(join(tmpdir(), "ompr-blobs-"));
+		const saved = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = dir;
+		try {
+			mkdirSync(join(dir, "blobs"));
+			writeFileSync(join(dir, "secret"), "do not leak");
+			const refs = [
+				"blob:sha256:../secret",
+				"blob:sha256:../../secret",
+				`blob:sha256:${"A".repeat(64)}`,
+				`blob:sha256:${"a".repeat(63)}`,
+				`blob:sha256:${"a".repeat(64)}`, // well-formed, but no such blob
+				"blob:sha256:",
+				"blob:md5:abc",
+			];
+			for (const ref of refs) assert.equal(resolveOmpBlob(ref, "image/png"), undefined, ref);
+			const blobs = createBlobStore();
+			const m = normalizeMessage({ role: "user", timestamp: 1, content: [{ type: "image", mimeType: "image/png", data: refs[0] }] }, { blobs, id: "u" })!;
+			assert.deepEqual(m.content, [{ type: "text", text: "[image unavailable: image/png]" }]);
+		} finally {
+			if (saved === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = saved;
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("maps approvals, asks, selects and ignores presentation frames", () => {
