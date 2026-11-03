@@ -1,0 +1,23 @@
+{
+  "name": "@omp-remote/relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Blind WebSocket relay for OMP Remote (PROTOCOL.md §2)",
+  "scripts": {
+    "start": "node src/cli.ts",
+    "test": "node --test test/",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
+    "typescript": "^5.6.0",
+    "wrangler": "^3.90.0"
+  }
+}

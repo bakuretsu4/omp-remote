@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android's network security config cannot express CIDR ranges, so "cleartext only for private addresses" cannot be
+  written here. The platform policy therefore permits cleartext, and the app enforces the real rule itself:
+  RelayUrls.validate() rejects a ws:// relay unless its host is loopback / RFC1918 / link-local / CGNAT IP literals and
+  10.0.2.2 (host names never qualify), both when parsing a pairing link and when editing relay URLs, and RelayLink.open() re-checks before
+  connecting. Everything on the wire is AES-256-GCM encrypted by the L1 secure channel regardless of transport.
+  User-added CAs are NOT trusted for wss:// (system roots only).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

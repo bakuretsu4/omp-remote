@@ -1,0 +1,14 @@
+node_modules/
+.wrangler/
+.gradle/
+build/
+**/build/
+local.properties
+*.apk
+*.ap_
+*.dex
+*.keystore
+*.jks
+google-services.json
+firebase-service-account*.json
+.DS_Store

@@ -1,0 +1,70 @@
+{
+  "_doc": "All byte strings are lowercase hex unless the key ends in _b64u. IVs are fixed for the vector only; production IVs are random.",
+  "keys": {
+    "bridgePriv": "00ff7a0e410384c808c8619be61a4f37e283ac855061a84136aa91ca8012c239",
+    "bridgePub": "0489ad8c38f41316b7009b2a3ec0d6c19546a3607256400089bbbe504e16f9ad7e837898272801245c5001961efba757ef699ed2b43aa182f75714d4d342a1374e",
+    "devicePriv": "36ce453584bba84bc2ef784b6cedab0cbb7205f773ccc645556f5efcfd2e5a32",
+    "devicePub": "04cea3fd0b6940edaaac1c8345c346377986f8fd99cbdf39033ee2a8b9dffc50cd9becb0459d951279357a53904d7424796003a0df31f48ab355798e1515ba88f0",
+    "ephAPriv": "9c19ac2edcc65a74a63e942d54307277f73a971eaa20108bfa0841501327d981",
+    "ephAPub": "040b23b5e212af8ff401da73f42b44aa27bf0749c9ba5a175e17e658bcbfcdb4e6c970b1e50c4353a2ec2e5861487572265a20b7c483ede50c11559def10291f06",
+    "ephBPriv": "45aa63acddd1e20ca3c6d9b6172e05bd172fe505f26c29aac7e45adfc02d4bc1",
+    "ephBPub": "04bc426a241eb268e6ca77f86f48bd3968d011314582715c6e013d40eb039e66eedc1a1afaed9d6a4f0c7dcafc8cc095d43b98fea9271aa5a85339c024a7e71b06"
+  },
+  "inputs": {
+    "pairingToken": "353c931594c2e88c97a08e8fa032d02d176289571f107802ac74739f4d2c0c7e",
+    "roomSecret": "c25b5b0656dad202c4b47173cd62880820239dea0fb344f88ee6fea9c1da08fa",
+    "did": "397db054124213e9",
+    "nonceA": "88c36e8e8fc060c4326b44a1165cefb8",
+    "nonceB": "2491bfd7bad228bc59a40f3cccf7b1f0"
+  },
+  "derived": {
+    "pairKey": "bd5e8c4a597a77d5031121b8d69cb3a93893f321a0accde78e4d15c8ba97895d",
+    "sharedDevice": "f9c5bf70a768d4483eae9143d36209cf46ab6bee7598823de44c7eff53543742",
+    "kDev": "6bad227baa0401a096f23906b31e8b440d4bb7a46a4cf887f9a97e6ecd4a7e5a",
+    "sharedEph": "a642dfa90020ac80736b10be18f092cf44f73bb2fb4ebad6caa4e44cbfc626c8",
+    "kC2B": "69fa23c674fdaf5ba447c5f28fbe92d0a2a48b86957638d630327327c0734adb",
+    "kB2C": "b997049d43ed3d7593da5ddaf007164ec9edf798dfaee23aef7353e321d59c09",
+    "hostId": "sYcXZiHXgmb",
+    "roomId": "dYrTkwxXLhxhf8LvgO5_Qn",
+    "bridgePub_b64u": "BImtjDj0Exa3AJsqPsDWwZVGo2ByVkAAibu-UE4W-a1-g3iYJygBJFxQAZYe-6dX72me0rQ6oYL3VxTU00KhN04",
+    "devicePub_b64u": "BM6j_QtpQO2qrByDRcNGN3mG-P2Zy985Az7iqLnf_FDNm-ywRZ2VEnk1elOQTXQkeWADoN8x9IqzVXmOFRW6iPA",
+    "sas": "230 428"
+  },
+  "frames": {
+    "pair": {
+      "aad": "6f6d7072310043",
+      "iv": "edd10b9f255e40cc5fb19d29",
+      "plaintext": "{\"t\":\"pair-req\",\"dpk\":\"BM6j_QtpQO2qrByDRcNGN3mG-P2Zy985Az7iqLnf_FDNm-ywRZ2VEnk1elOQTXQkeWADoN8x9IqzVXmOFRW6iPA\",\"label\":\"Pixel 8\",\"ts\":1700000000000}",
+      "payload": "00edd10b9f255e40cc5fb19d29f88871dd093e16c5699f9c294fcc3a519ab43adad1e078637f3b3ba8f90ea5fb7b88ef202ed5c2ab95a7dec3a0123d0493c05f67274e0074772b34e5827a44aece12870d215269fe87810ac65776e28be5bede1f8652fe5259241e969671f61586da6ee4b6ad545ae7b12e2c4090ed99a23fafa47b496e2ca79f6fc3f568eee567da49ede07d8cd312005b316a5baa8e860e1fe5e4607ba5fec9d4354dc944a971dd379bce"
+    },
+    "hello": {
+      "aad": "6f6d7072310143397db054124213e9",
+      "iv": "bd651fdcce0910173abfb74f",
+      "plaintext": "{\"t\":\"hello\",\"eph\":\"BAsjteISr4_0Adpz9CtEqie_B0nJuloXXhfmWLy_zbTmyXCx5QxDU6LsLlhhSHVyJlogt8SD7eUMEVWd7xApHwY\",\"n\":\"iMNujo_AYMQya0ShFlzvuA\",\"ts\":1700000000000,\"caps\":[\"location\",\"notify\"],\"app\":\"0.1.0\",\"label\":\"Pixel 8\"}",
+      "payload": "01397db054124213e9bd651fdcce0910173abfb74fe3687fd745e9f3bc76cf26bfaaf41a840474745d202769d4e620737d9a798b29ca359f890cc816acf15e0c3f2a5f0e61bd3a63b30e1c574ab5cedd1a464240b6f247274b24f039806af90c5e06ba16e6f2f96926b51786b7f0f43f2c030c6d2dce1bb5af157abf780110f8db51ab96679d489b97cffa668c7d54c008f37f69b186cca9c8b5cd59dc2676401989653adefde43eadd9013634fae6636ab682910eb3b1e7c0db061271439a5820a897ed9b35ceae21d785ba99c21bfc82b1d845dac1353289dd3f6f4e9b65cf110fa531661cbd9f5fa221a7452dacdf7bc697d856d202519b8365de8f3d2e"
+    },
+    "helloOk": {
+      "aad": "6f6d7072310142",
+      "iv": "82093a7624cfc156ba063cef",
+      "plaintext": "{\"t\":\"hello-ok\",\"eph\":\"BLxCaiQesmjmynf4b0i9OWjQETFFgnFcbgE9QOsDnmbu3Boa-u2dak8Mfcr8jMCV1DuY_qknGqWoUznAJKfnGwY\",\"n\":\"JJG_17rSKLxZpA88zPex8A\",\"host\":{\"proto\":1,\"hostId\":\"sYcXZiHXgmb\"}}",
+      "payload": "0182093a7624cfc156ba063cef5a3af01cb75e10b1087279c4ab9d27b55022490ccf3c0e0c5ad0660ab8e07425d47b3f457aae2a38e3ed19587336ee77d330f809d07a44f7be4fa0fd1f0e910ec014ff9897644befe80e88407f4801cc14a8492e56b7ffd432523852722ce3b8a9a631ccf8d217c95331100c0d2e258dc97571f7076be741b6061928136143ab39f8121cd86c15cd8ad518e5573821891125a825c6300821b77aee75273da541538c55120a717067bfce51d9c036d62bb70e511361907ec75f67e9aea383b89321aca82659ed98"
+    },
+    "dataC2B": {
+      "aad": "6f6d7072310243",
+      "iv": "06ef2c425d5694bcdf7762e5",
+      "plaintext": "{\"q\":1,\"t\":\"req\",\"id\":1,\"op\":\"host.info\",\"a\":{}}",
+      "payload": "0206ef2c425d5694bcdf7762e5de20683319b4de63663b71228dda3a23a53dd061a9441e9f059c2ad398b821a854fcaca9775676b55ffbd2343e07491a53c17ee184bb49ccc293cd210ae4c2eb"
+    },
+    "dataB2C": {
+      "aad": "6f6d7072310242",
+      "iv": "b5f24f382b9829c283135cee",
+      "plaintext": "{\"q\":1,\"t\":\"res\",\"id\":1,\"ok\":true,\"d\":{\"proto\":1}}",
+      "payload": "02b5f24f382b9829c283135ceeb9f86de18f40a06a8d519313c4181368dd056d190527d9ce6fb36df9b777f3abdb4229d12edccde2322f486a05c59567512b33703e269d2a8862d62c9a677ea6ea9a"
+    }
+  },
+  "envelope": {
+    "peerId": 7,
+    "payloadHex": "0200ff",
+    "packedHex": "000000070200ff"
+  }
+}

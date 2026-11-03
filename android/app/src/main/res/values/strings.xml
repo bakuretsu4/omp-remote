@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OMP Remote</string>
+    <string name="stop">Stop</string>
+    <string name="retry">Retry</string>
+    <string name="cancel">Cancel</string>
+    <string name="something_went_wrong">Something went wrong</string>
+
+    <string name="channel_approval">Approvals</string>
+    <string name="channel_approval_desc">An agent wants permission to run a tool</string>
+    <string name="channel_question">Questions</string>
+    <string name="channel_question_desc">An agent is asking you something</string>
+    <string name="channel_done">Finished</string>
+    <string name="channel_done_desc">An agent finished its work</string>
+    <string name="channel_error">Errors</string>
+    <string name="channel_error_desc">A session failed</string>
+    <string name="channel_limit">Usage limits</string>
+    <string name="channel_limit_desc">A provider usage limit was hit</string>
+    <string name="channel_connection">Connection</string>
+    <string name="channel_connection_desc">Shown while the app stays connected to your PC</string>
+
+    <string name="attn_approval">Approval needed</string>
+    <string name="attn_question">Question</string>
+    <string name="attn_done">Done</string>
+    <string name="attn_error">Error</string>
+    <string name="attn_limit">Limit reached</string>
+
+    <string name="fgs_starting">Starting…</string>
+    <string name="fgs_no_hosts">No PC paired</string>
+    <string name="fgs_connected_to">Connected to %1$s</string>
+    <string name="fgs_connecting">Connecting to %1$s…</string>
+    <string name="fgs_reconnecting">%1$s offline, retrying</string>
+    <string name="fgs_problem">%1$s needs attention</string>
+
+    <string name="unlock_title">Unlock OMP Remote</string>
+    <string name="approve_auth_title">Confirm approval</string>
+
+    <string name="status_working">Working</string>
+    <string name="status_waiting">Waiting for you</string>
+    <string name="status_idle">Idle</string>
+    <string name="status_offline">Offline</string>
+
+    <string name="conn_connecting">Connecting to your PC…</string>
+</resources>
