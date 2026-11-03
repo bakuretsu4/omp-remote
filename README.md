@@ -1,0 +1,60 @@
+# OMP Remote
+
+Monitor and drive your [omp](https://github.com/can1357/oh-my-pi) coding-agent sessions from your phone: see which sessions are working,
+waiting for you, or done; approve tool prompts and answer `ask` dialogs; chat, steer and interrupt; start new sessions on your PC while
+you are away; attach images and files. No VPN: the phone and the PC both connect **out** to a small relay, and everything between them
+is end-to-end encrypted.
+
+```mermaid
+flowchart LR
+  P[Phone app] -- "wss, E2E encrypted" --> R[Blind relay<br/>Cloudflare Worker or Node]
+  R -- "wss, E2E encrypted" --> B["Bridge daemon (ompr)<br/>on the PC"]
+  B -- "spawns, JSONL over stdio" --> M["omp --mode rpc-ui<br/>(phone-started sessions)"]
+  B -- "collab guest" --> T["your live omp TUIs"]
+```
+
+| Dir | What | Docs |
+|---|---|---|
+| [`protocol/`](protocol) | Typed message shapes, reference crypto, **cross-language test vectors** | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) |
+| [`relay/`](relay) | Blind WebSocket relay (Cloudflare Worker + Durable Object, or Node) | [`relay/README.md`](relay/README.md) |
+| [`bridge/`](bridge) | `ompr`: the PC daemon, pairing, session supervision, attention inbox | [`bridge/README.md`](bridge/README.md) |
+| [`android/`](android) | Native Kotlin + Compose app (the reference client) | [`android/README.md`](android/README.md) |
+
+Porting to another platform? Start with [`docs/PORTING-IOS.md`](docs/PORTING-IOS.md).
+
+## Security in one paragraph
+
+A paired phone can start sessions and answer approvals, which means a leaked phone key is **remote code execution on your PC**. Each device gets its own key
+(P-256 ECDH + HKDF at pairing, re-authenticated with fresh ephemeral keys on every connection, AES-256-GCM frames, per-direction replay counters). The relay only sees ciphertext, room ids and sizes.
+Pairing needs a one-time link plus a 6-digit code compared on both screens. `yolo` approval mode is off by default. `ompr revoke <id>` cuts a device off immediately.
+Details and known limits: [`bridge/README.md`](bridge/README.md#security-model). An independent review was done and its findings fixed; the code has not had an outside audit.
+
+## Quick start (PC)
+
+Needs [omp](https://github.com/can1357/oh-my-pi) installed, and Node 26 (the code runs `.ts` directly; it has only been run on Node 26).
+
+```sh
+cd relay  && npm install && npx wrangler login && npx wrangler deploy   # free Cloudflare plan; prints your wss:// URL
+cd ../bridge && npm install
+node src/cli.ts init --name "My PC"        # then put your relay URL in ~/.config/ompr/config.json  ("relays": [...])
+node src/cli.ts install-service            # prints the systemctl commands to enable the always-on daemon
+node src/cli.ts pair                       # prints a QR + link, valid 10 minutes, single use
+```
+
+Build and install the app: see [`android/README.md`](android/README.md). Without Cloudflare you can run the Node relay on any host: [`relay/README.md`](relay/README.md).
+
+## Status
+
+Verified on real hardware (Pixel 7) and an emulator, against real omp:
+
+- pairing by QR (with the confirmation code) and automatic reconnect;
+- starting a session from the phone, approvals, `ask` dialogs, steer/queue/interrupt, image and file upload, tool-result images;
+- attaching to a live TUI session and prompting it from the phone;
+- the Cloudflare Worker, deployed and contract-tested over real TLS.
+
+Tests: bridge 198, relay 24, Android 41, plus shared crypto vectors that every client must reproduce.
+
+**Not done / not verified:** push notifications (FCM code exists but is untested without a Firebase project), voice (`live.*`) and phone-as-agent-tools
+(the app has the hook, no implementations), biometric lock on real hardware, wake-on-LAN (the PC must be awake), and anything iOS.
+
+There is no license file yet.
