@@ -57,4 +57,10 @@ Tests: bridge 198, relay 24, Android 41, plus shared crypto vectors that every c
 **Not done / not verified:** push notifications (FCM code exists but is untested without a Firebase project), voice (`live.*`) and phone-as-agent-tools
 (the app has the hook, no implementations), biometric lock on real hardware, wake-on-LAN (the PC must be awake), and anything iOS.
 
-There is no license file yet.
+## License and credits
+
+[MIT](LICENSE). This is an independent project and is not affiliated with omp. It uses omp's RPC mode and the `omp collab` commands; the collab wire format was
+reimplemented from omp's own MIT-licensed source (see `bridge/src/tui/`).
+
+This software lets a paired phone run commands on your PC. Read the security model above before using it, and report vulnerabilities privately through this
+repository's **Security → Report a vulnerability** page rather than in a public issue.
