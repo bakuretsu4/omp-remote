@@ -17,6 +17,8 @@ import app.ompr.service.Presence
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -111,22 +113,31 @@ class PhoneToolHandler(
     private suspend fun waitForUser(conn: HostConnection, spec: PhoneToolSpec, args: JsonObject, consent: Boolean, deadline: Long): Outcome {
         val hostName = conn.info.value?.name ?: "your PC"
         val request = if (consent) runtime.newRequest(spec, describe(spec, args), hostName) else null
-        if (!presence.appVisible) notifier.showToolWaiting(spec.action, hostName)
-        try {
-            val answer = withTimeoutOrNull((deadline - now()).coerceAtLeast(1)) {
-                if (request != null) request.decision.await() else {
-                    presence.visible.first { it }
-                    true
+        return coroutineScope {
+            // Watch visibility for the whole wait, not just at the start: the app can leave the screen after the question is
+            // raised (the user presses Home right after approving), and then only a notification can bring them back.
+            val watcher = launch {
+                presence.visible.collect { visible ->
+                    if (visible) notifier.cancelToolWaiting() else notifier.showToolWaiting(spec.action, hostName)
                 }
             }
-            return when (answer) {
-                null -> Outcome.NO_RESPONSE
-                true -> Outcome.GRANTED
-                false -> Outcome.DECLINED
+            try {
+                val answer = withTimeoutOrNull((deadline - now()).coerceAtLeast(1)) {
+                    if (request != null) request.decision.await() else {
+                        presence.visible.first { it }
+                        true
+                    }
+                }
+                when (answer) {
+                    null -> Outcome.NO_RESPONSE
+                    true -> Outcome.GRANTED
+                    false -> Outcome.DECLINED
+                }
+            } finally {
+                watcher.cancel()
+                request?.let(runtime::finish)
+                notifier.cancelToolWaiting()
             }
-        } finally {
-            request?.let(runtime::finish)
-            notifier.cancelToolWaiting()
         }
     }
 

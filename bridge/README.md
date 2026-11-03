@@ -134,7 +134,8 @@ the bridge sends one content-free FCM data message `{"w":"1","h":"<hostId>"}` to
 - Filesystem access is limited to `roots`: every path is `realpath`-resolved and must stay under a root (symlinks and `..` cannot
   escape; links pointing out are hidden from listings). Uploaded files land in `<session cwd>/.ompr-inbox/` (0700, files 0600,
   sanitized names, never overwriting, symlinked inboxes refused, added to `.git/info/exclude`).
-- Session files opened from the phone must live in omp's session directory and belong to a cwd under a root.
+- Session files opened from the phone must live in omp's session directory and belong to a cwd under a root. `sessions.open` also refuses (`busy`)
+  a session that another running omp still holds (typically an open terminal), using `omp session lease`, so two writers never share one session file.
 - The daemon refuses to run as root.
 
 ## What the phone can do per session kind

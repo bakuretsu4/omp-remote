@@ -106,10 +106,22 @@ export class SessionLauncher {
 		}
 		const info = await readSessionInfo(real);
 		if (!info?.cwd) throw invalid("not an omp session file");
+		if (info.sessionId) await this.#assertNotOpenElsewhere(info.sessionId);
 		const cwd = await this.#dir(info.cwd);
 		this.assertApprovalAllowed(this.#d.config.defaultApprovalMode);
 		const backend = await this.#launch({ cwd, approvalMode: this.#d.config.defaultApprovalMode, resumeFile: real, hostTools: false });
 		return { sid: backend.sid };
+	}
+
+	/**
+	 * A live omp that still holds the session (typically a terminal) must not get a second writer on the same file. A phone
+	 * tapping a "Recent" entry that is actually open in a TUI would otherwise resume it alongside the TUI.
+	 */
+	async #assertNotOpenElsewhere(sessionId: string): Promise<void> {
+		if (!/^[\w-]{8,80}$/.test(sessionId)) return;
+		const lease = await this.#lease(sessionId);
+		if (lease.held.includes(sessionId)) throw busy("this session is open in another omp (for example a terminal). Close it there first.");
+		if (lease.unknown.includes(sessionId)) throw busy("could not tell whether another omp has this session open");
 	}
 
 	/** `sessions.handover`: only when the TUI no longer holds the session lease. */

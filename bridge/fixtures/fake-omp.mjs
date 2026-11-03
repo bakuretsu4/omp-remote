@@ -7,6 +7,14 @@ if (process.argv.includes("--version")) {
 	process.exit(0);
 }
 
+// `omp session lease --json -- <id>...`: which sessions a running omp holds. Tests set FAKE_LEASE_HELD / FAKE_LEASE_UNKNOWN (comma-separated ids).
+if (process.argv[2] === "session" && process.argv[3] === "lease") {
+	const csv = name => (process.env[name] ?? "").split(",").filter(Boolean);
+	const ids = process.argv.slice(process.argv.indexOf("--") + 1);
+	console.log(JSON.stringify({ held: ids.filter(i => csv("FAKE_LEASE_HELD").includes(i)), unknown: ids.filter(i => csv("FAKE_LEASE_UNKNOWN").includes(i)) }));
+	process.exit(0);
+}
+
 const out = o => process.stdout.write(`${JSON.stringify(o)}\n`);
 let v2 = false;
 let n = 0;

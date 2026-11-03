@@ -66,7 +66,14 @@ them, **every tool is Off** until the user picks a mode in Settings → Phone to
   because the bridge only learns them from HELLO.
 * Android only lets the focused app read the clipboard, get a location fix reliably or take a photo. Such a call waits for
   the user to open the app and posts a "the agent wants to …" notification (generic text on the lock screen); it has a
-  55 s budget, under the bridge's 60 s timeout.
+  55 s budget, under the bridge's 60 s timeout. The app is watched for the whole wait, so the notification also appears if
+  the user leaves the app after the question was raised. Tapping it opens the confirmation.
+* The system camera, a permission dialog or a notification tap all take the app off screen, and Android then withholds the
+  network from a background app that has no foreground service (seen on a Pixel 7: the relay socket died the moment the camera
+  opened). So a pending call holds the connection, and a call that needs the user or the screen runs the connection foreground
+  service for its duration (reference-counted; skipped when "Keep connected" already runs it).
+* A call can only *arrive* while the app is closed if "Keep connected" is on; otherwise Android drops the connection a few
+  seconds after the app leaves the screen, which is why the clipboard, location and camera tools are best used with the app open.
 * Location uses the platform `LocationManager` (no Google Play Services). The camera opens the system camera app; the
   photo is shrunk to ≤ 300 KB because `hosttool.result` must fit one 512 KiB frame.
 * `phone_notify` is limited to 10 per minute; clipboard text to 20,000 characters.

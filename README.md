@@ -52,11 +52,12 @@ Verified on real hardware (Pixel 7) and an emulator, against real omp:
 - attaching to a live TUI session and prompting it from the phone;
 - the Cloudflare Worker, deployed and contract-tested over real TLS.
 
-Tests: bridge 198, relay 24, Android 51, plus shared crypto vectors that every client must reproduce.
+Tests: bridge 201, relay 24, Android 51, plus shared crypto vectors that every client must reproduce.
 
-**Phone-as-agent-tools** (location, clipboard, notifications, camera; every tool Off until the user enables it) are implemented. The bridge and protocol half
-is verified end to end against real omp (`bridge/e2e/live-hosttools.ts`: the agent called all four tools and used the text and image results);
-the Android half has unit tests but has not yet been tried on a device.
+**Phone-as-agent-tools** (location, clipboard, notifications, camera; every tool Off until the user enables it) work end to end on a Pixel 7 against real omp: the agent sent a
+notification, read a real location fix, wrote and read back the clipboard, and received and described a camera photo. A call that arrives while the app is closed posts a notification that
+opens the confirmation. The bridge half is also covered by a live script (`bridge/e2e/live-hosttools.ts`). Testing on the device found and fixed three bugs (the connection died while the system
+camera was open; no notification was posted if the app left the screen while a confirmation was pending; a "Recent" session that a live terminal still held could be opened a second time).
 
 **Not done / not verified:** push notifications (FCM code exists but is untested without a Firebase project), voice (`live.*`), the biometric lock on
 real hardware, wake-on-LAN (the PC must be awake), and anything iOS.
