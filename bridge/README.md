@@ -71,7 +71,7 @@ State lives in `$OMPR_HOME` (default `~/.config/ompr`): directory `0700`, files 
     "extraArgs": []                  // appended to every managed omp command line
   },
   "defaultApprovalMode": "always-ask", // always-ask | always-ask-cached | write | yolo (must be in allowedApprovalModes)
-  "allowedApprovalModes": ["always-ask", "always-ask-cached", "write"], // yolo is OFF by default; add "yolo" here to allow it
+  "allowedApprovalModes": ["always-ask", "always-ask-cached", "write"], // yolo is OFF by default; add "yolo" here to allow it. Reported in host.info, so the app only offers these
   "inhibitSleepWhileWorking": true,  // hold systemd-inhibit sleep:idle while a managed session is mid-turn
   "fcm": { "serviceAccountPath": "/path/to/firebase-service-account.json" }, // optional, see Push
   "maxManagedSessions": 16,

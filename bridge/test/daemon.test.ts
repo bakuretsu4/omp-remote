@@ -70,6 +70,7 @@ describe("daemon", () => {
 		const info = await c.req("host.info", {});
 		assert.equal(info.name, "test-host");
 		assert.equal(info.ompVersion, "0.0.0-fake");
+		assert.deepEqual(info.approvalModes, ["always-ask", "always-ask-cached", "write"], "the app is told which approval modes it may offer (yolo is off by default)");
 		assert.deepEqual((await c.req("fs.roots", {})).roots, [root]);
 		await assert.rejects(() => c.req("fs.list", { path: join(root, "proj", "up") }), (e: unknown) => e instanceof RpcFailure && e.code === "forbidden_path");
 		await assert.rejects(() => c.req("sessions.create", { cwd: tmp }), (e: unknown) => e instanceof RpcFailure && e.code === "forbidden_path");

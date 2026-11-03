@@ -38,6 +38,8 @@ export interface HostInfo {
 	roots: string[];
 	/** True when the bridge can send FCM wake pushes. */
 	push: boolean;
+	/** Approval modes this PC accepts for sessions started or changed from a phone. Absent on older bridges: assume all. */
+	approvalModes?: ApprovalMode[];
 	now: number;
 }
 

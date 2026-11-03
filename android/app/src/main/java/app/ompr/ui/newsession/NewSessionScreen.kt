@@ -108,8 +108,11 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
     var goal by rememberSaveable { mutableStateOf("") }
     var hostTools by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
+    val hostInfo by conn.info.collectAsState()
+    val allowedModes = ApprovalModes.allowedBy(hostInfo)
     val defaultApproval by graph.settings.defaultApprovalMode.collectAsState(ApprovalModes.ALWAYS_ASK)
-    val approvalMode = approval ?: defaultApproval
+    // A stored default the PC forbids (for example yolo) falls back to the strictest mode it allows.
+    val approvalMode = ApprovalModes.orStrictest(approval ?: defaultApproval, hostInfo)
 
     val attachments = remember(conn) { AttachmentController(graph.app, graph.scope, conn, null) }
     val launchers = rememberAttachmentLaunchers(attachments)
@@ -256,7 +259,7 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
 
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Approvals", style = MaterialTheme.typography.labelLarge)
-                        for (m in ApprovalModes.all) {
+                        for (m in allowedModes) {
                             Row(
                                 Modifier.fillMaxWidth().selectable(selected = approvalMode == m, role = Role.RadioButton, onClick = { approval = m }).padding(vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,

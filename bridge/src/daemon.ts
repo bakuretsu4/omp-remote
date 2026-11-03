@@ -107,6 +107,7 @@ export class BridgeDaemon {
 			ompVersion: this.#ompVersion,
 			roots: this.#roots,
 			push: this.push.enabled,
+			approvalModes: this.config.allowedApprovalModes,
 			now: Date.now(),
 		};
 	}

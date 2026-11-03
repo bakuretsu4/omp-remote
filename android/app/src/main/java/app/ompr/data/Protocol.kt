@@ -93,6 +93,12 @@ object ApprovalModes {
 
     /** Modes that skip prompts for at least some tools: starting a session in one needs the biometric gate. */
     fun skipsPrompts(m: String): Boolean = m == WRITE || m == YOLO || m !in all
+
+    /** Modes the connected PC will accept, strictest first. A bridge that does not report any (an older build) is assumed to allow all. */
+    fun allowedBy(info: HostInfo?): List<String> = info?.approvalModes?.let { allowed -> all.filter { it in allowed } } ?: all
+
+    /** [preferred] when the PC allows it, otherwise the strictest mode it does allow. */
+    fun orStrictest(preferred: String, info: HostInfo?): String = allowedBy(info).let { if (preferred in it) preferred else it.firstOrNull() ?: ALWAYS_ASK }
 }
 
 object ThinkingLevels {
@@ -153,6 +159,7 @@ data class HostInfo(
     val ompVersion: String? = null,
     val roots: List<String> = emptyList(),
     val push: Boolean = false,
+    val approvalModes: List<String>? = null,
     @Serializable(with = FlexLong::class) val now: Long = 0,
 )
 

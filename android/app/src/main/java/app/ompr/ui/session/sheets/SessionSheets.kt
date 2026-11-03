@@ -32,6 +32,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -101,6 +102,7 @@ fun SessionSettingsSheet(view: SessionView, handle: SessionHandle, actions: Sess
     val model = st.model ?: sum?.model
     val thinking = st.thinkingLevel ?: sum?.thinkingLevel
     val approval = st.approvalMode ?: sum?.approvalMode
+    val hostInfo by handle.conn.info.collectAsState()
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
         Column(
@@ -145,7 +147,7 @@ fun SessionSettingsSheet(view: SessionView, handle: SessionHandle, actions: Sess
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Approvals", style = MaterialTheme.typography.labelLarge)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (m in ApprovalModes.all) FilterChip(selected = approval == m, enabled = !busy, onClick = {
+                        for (m in ApprovalModes.allowedBy(hostInfo)) FilterChip(selected = approval == m, enabled = !busy, onClick = {
                             run {
                                 if (ApprovalModes.isWeaker(approval, m) && !graph.gate.guard(activity, "Allow ${approvalLabel(m)}")) {
                                     actions.toast("Authentication is required to loosen approvals")
