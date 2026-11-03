@@ -1,5 +1,6 @@
 package app.ompr.tools
 
+import android.content.Context
 import android.os.SystemClock
 import app.ompr.data.HostEvent
 import app.ompr.data.PhoneToolPolicy
@@ -10,10 +11,12 @@ import app.ompr.data.ToolGate
 import app.ompr.net.HostConnection
 import app.ompr.net.HostToolHandler
 import app.ompr.net.HostToolResult
+import app.ompr.service.ConnectionService
 import app.ompr.service.Notifier
 import app.ompr.service.Presence
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -21,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -32,6 +36,7 @@ import kotlinx.serialization.json.contentOrNull
  * (clipboard read, location, camera) waits for the user to open the app, with a notification if it is in the background.
  */
 class PhoneToolHandler(
+    private val context: Context,
     private val settings: SettingsStore,
     private val presence: Presence,
     private val runtime: ToolRuntime,
@@ -58,17 +63,49 @@ class PhoneToolHandler(
         declinedAt[spec.id]?.let {
             if (now() - it < COOLDOWN_MS) return HostToolResult.failure("The user declined ${spec.id} a moment ago. Do not ask again right now.")
         }
-        if (gate is ToolGate.WaitForUser) {
-            when (waitForUser(conn, spec, call.args, gate.consent, deadline)) {
-                Outcome.GRANTED -> Unit
-                Outcome.DECLINED -> {
-                    declinedAt[spec.id] = now()
-                    return HostToolResult.failure("The user declined")
+        val proceed: suspend () -> HostToolResult = {
+            var refused: HostToolResult? = null
+            if (gate is ToolGate.WaitForUser) {
+                when (waitForUser(conn, spec, call.args, gate.consent, deadline)) {
+                    Outcome.GRANTED -> Unit
+                    Outcome.DECLINED -> {
+                        declinedAt[spec.id] = now()
+                        refused = HostToolResult.failure("The user declined")
+                    }
+                    Outcome.NO_RESPONSE -> refused = HostToolResult.failure("The user did not respond in time")
                 }
-                Outcome.NO_RESPONSE -> return HostToolResult.failure("The user did not respond in time")
+            }
+            refused ?: execute(spec, call.args, deadline)
+        }
+        return if (spec.needsForeground || gate is ToolGate.WaitForUser) withForegroundService(proceed) else proceed()
+    }
+
+    private val serviceLock = Any()
+    private var leases = 0
+    private var startedByUs = false
+
+    /**
+     * Android withholds the network from an app that is in the background without a foreground service, and the system camera,
+     * a permission dialog or a notification the user has to tap all put the app there. So the connection service runs for the
+     * duration of the call (unless "Keep connected" already does), and the bridge does not see the phone disconnect.
+     * Overlapping calls share one start; the last one out stops it.
+     */
+    private suspend fun withForegroundService(block: suspend () -> HostToolResult): HostToolResult {
+        val keep = settings.isKeepConnected()
+        synchronized(serviceLock) {
+            if (leases++ == 0 && !keep) startedByUs = ConnectionService.start(context)
+        }
+        try {
+            return block()
+        } finally {
+            val keepNow = withContext(NonCancellable) { settings.isKeepConnected() }
+            synchronized(serviceLock) {
+                if (--leases == 0 && startedByUs) {
+                    startedByUs = false
+                    if (!keepNow) ConnectionService.stop(context)
+                }
             }
         }
-        return execute(spec, call.args, deadline)
     }
 
     private suspend fun waitForUser(conn: HostConnection, spec: PhoneToolSpec, args: JsonObject, consent: Boolean, deadline: Long): Outcome {

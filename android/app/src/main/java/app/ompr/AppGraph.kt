@@ -33,7 +33,7 @@ class AppGraph(val app: Application) {
     val presence = Presence()
     val notifier = Notifier(app, settings, presence)
     val toolRuntime = ToolRuntime()
-    val phoneTools = PhoneToolHandler(settings, presence, toolRuntime, DeviceTools(app, notifier), notifier)
+    val phoneTools = PhoneToolHandler(app, settings, presence, toolRuntime, DeviceTools(app, notifier), notifier)
     val connections = ConnectionManager(app, hosts, settings, notifier, scope, Http.client, phoneTools)
     val pairing = Pairing(Http.client, hosts)
     val gate = BiometricGate(settings)

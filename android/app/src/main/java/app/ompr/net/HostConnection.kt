@@ -331,16 +331,24 @@ class HostConnection(
             is HostEvent.SessionsChanged -> refreshTrigger.trySend(Unit)
             is HostEvent.HostToolCall -> {
                 toolJobs[ev.callId] = scope.launch {
-                    val result = try {
-                        hostTools.call(this@HostConnection, ev)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        HostToolResult.failure("Tool failed: ${e.message ?: e.javaClass.simpleName}")
+                    // A call can take the app off screen (system camera, permission dialog, a notification the user must tap).
+                    // Without this hold the connection is released after the navigation grace period and the bridge fails the call
+                    // with "the phone disconnected". It also covers sending the result back.
+                    val hold = acquire()
+                    try {
+                        val result = try {
+                            hostTools.call(this@HostConnection, ev)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
+                            HostToolResult.failure("Tool failed: ${e.message ?: e.javaClass.simpleName}")
+                        } finally {
+                            toolJobs.remove(ev.callId)
+                        }
+                        runCatching { request("hosttool.result", result.toArgs(ev.callId)) }
                     } finally {
-                        toolJobs.remove(ev.callId)
+                        hold.close()
                     }
-                    runCatching { request("hosttool.result", result.toArgs(ev.callId)) }
                 }
             }
             is HostEvent.HostToolCancel -> {
