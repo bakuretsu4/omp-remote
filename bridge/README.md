@@ -75,7 +75,13 @@ State lives in `$OMPR_HOME` (default `~/.config/ompr`): directory `0700`, files 
   "inhibitSleepWhileWorking": true,  // hold systemd-inhibit sleep:idle while a managed session is mid-turn
   "fcm": { "serviceAccountPath": "/path/to/firebase-service-account.json" }, // optional, see Push
   "maxManagedSessions": 16,
-  "tui": { "enabled": true, "control": false } // attach to live TUI sessions; control=false uses read-only (--view) links
+  "tui": { "enabled": true, "control": false }, // attach to live TUI sessions; control=false uses read-only (--view) links
+  "peer": {                          // optional companion PC to mirror sessions to, see "Peer sync"
+    "ssh": "my-server",              // key-based `ssh my-server` + rsync on both machines
+    "ompBin": "~/.local/bin/omp",    // omp on the peer (needs `omp session lease`)
+    "syncProjects": true,            // also mirror each session's project folder
+    "intervalSec": 300               // periodic catch-up; 0 = only on turn end, session close, startup
+  }
 }
 ```
 
@@ -89,6 +95,29 @@ The bridge always runs an embedded relay on `127.0.0.1:7466` and connects to it 
 relay listens on `0.0.0.0:7470` for the phone on the same Wi-Fi. WAN access needs a public relay (`relay/` in this repo;
 deployable as a Cloudflare Worker or `node relay/src/cli.ts`) listed in `relays`. The relay only ever sees the room id,
 connection timing and frame sizes.
+
+### Peer sync (keep working while this PC is off)
+
+With `peer` set, the bridge mirrors omp's session files (`~/.omp/agent/sessions`), their image blobs and, optionally, each
+session's project folder to a second always-on machine over SSH + rsync. Run a bridge on that machine too (paired with the
+phone as another PC) and you can open the same session from the phone while this PC is off. When this PC comes back it
+pulls whatever the peer advanced. Sync runs at startup, after every finished turn, when a session closes, and every
+`intervalSec`. `ompr sync` does one run and exits.
+
+Rules the sync follows:
+
+- **Lease-safe, fails closed.** A session held by a running omp (`omp session lease`, on either machine) is never overwritten
+  on that machine, and ids the lease check cannot classify count as held. If the lease check cannot run at all, nothing is synced.
+- **Longer transcript wins** (same length: later mtime). Transcripts are append-only, so this never drops entries unless
+  both machines appended while disconnected; in that case the shorter fork is replaced, so do not edit one session on both
+  machines at once.
+- **Projects:** files newer on the sender overwrite (`rsync --update`), nothing is deleted, and `node_modules`, `build`,
+  `.gradle`, `target`, `.venv`, `__pycache__`, `.wrangler` are skipped. A folder is mirrored only when it is under `roots`,
+  is not a root itself (`~`, `/tmp`) and has no dot-directory component (`.ssh`, `.config`, `.omp`, ...). `.git` is mirrored
+  as plain files, so commit/push from one machine at a time.
+- The peer needs `rsync`, `python3`, `omp` and the same absolute path for `~` (session headers store absolute `cwd`).
+- Login is **not** synced. Sign in on the peer separately (`omp auth-broker login --via=user@peer anthropic`, or `/login` there).
+  Copying the vault would let two machines refresh the same OAuth token and invalidate each other.
 
 ### Attaching TUI sessions
 

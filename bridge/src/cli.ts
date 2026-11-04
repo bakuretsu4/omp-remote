@@ -3,17 +3,18 @@
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import qrcode from "qrcode-terminal";
 import { RelayConnection } from "./relay-client.ts";
 import { connectControl, BridgeDaemon, BRIDGE_VERSION } from "./daemon.ts";
-import { defaultConfig, loadConfig, omprHome, parseConfig, paths, saveConfig, type Config } from "./config.ts";
+import { defaultConfig, loadConfig, omprHome, ompSessionsDir, parseConfig, paths, saveConfig, type Config } from "./config.ts";
 import { DeviceStore } from "./devices.ts";
 import { createIdentity, loadIdentity } from "./identity.ts";
 import { loadServiceAccount } from "./push.ts";
-import { auditStateModes } from "./safefs.ts";
+import { auditStateModes, resolveRoots } from "./safefs.ts";
+import { PeerSync } from "./sync.ts";
 
 const USAGE = `ompr ${BRIDGE_VERSION} — control omp sessions from your phone
 
@@ -25,6 +26,7 @@ usage: ompr <command>
   status                         daemon state
   run                            run the bridge daemon (embedded relay, sessions, TUI attach)
   install-service                write ~/.config/systemd/user/ompr.service
+  sync                           mirror sessions + project folders with the configured \`peer\` now, then exit
   doctor                         check omp, relays, FCM, paths
 
 State lives in $OMPR_HOME or ~/.config/ompr.`;
@@ -348,6 +350,28 @@ async function cmdDoctor(dir: string): Promise<void> {
 	if (bad > 0) process.exit(1);
 }
 
+async function cmdSync(dir: string): Promise<void> {
+	const cfg = loadConfig(dir);
+	if (!cfg.peer) {
+		console.error('ompr: no peer configured; add {"peer": {"ssh": "<host>"}} to config.json');
+		process.exit(1);
+	}
+	const roots = await resolveRoots(cfg.roots);
+	const sessionsDir = ompSessionsDir(cfg);
+	const sync = new PeerSync({
+		peer: cfg.peer,
+		localOmpBin: cfg.omp.bin,
+		localSessionsDir: sessionsDir,
+		localBlobsDir: join(dirname(sessionsDir), "blobs"),
+		roots: () => roots,
+		// No daemon registry in a one-shot run: `omp session lease` is what detects open terminals and managed sessions.
+		liveSessionFiles: () => new Set(),
+		log: m => console.log(m),
+	});
+	const r = await sync.syncNow();
+	console.log(`sessions: pushed ${r.pushedSessions.length}, pulled ${r.pulledSessions.length}; projects: pushed ${r.pushedProjects.length}, pulled ${r.pulledProjects.length}; ${(r.durationMs / 1000).toFixed(1)}s`);
+}
+
 async function main(): Promise<void> {
 	const [cmd, ...rest] = process.argv.slice(2);
 	if (!cmd || cmd === "-h" || cmd === "--help" || cmd === "help") {
@@ -376,6 +400,8 @@ async function main(): Promise<void> {
 			return cmdRun(dir);
 		case "install-service":
 			return cmdInstallService();
+		case "sync":
+			return cmdSync(dir);
 		case "doctor":
 			return cmdDoctor(dir);
 		default:

@@ -6,6 +6,25 @@ import { isRecord } from "./guards.ts";
 
 export const APPROVAL_MODES: readonly ApprovalMode[] = ["always-ask", "always-ask-cached", "write", "yolo"];
 
+/**
+ * A companion PC (typically always on) that this machine mirrors sessions, blobs and project folders to over
+ * SSH + rsync, so work continues from the phone while this PC is off. Needs key-based `ssh <ssh>` and `rsync` on both.
+ */
+export interface PeerConfig {
+	/** SSH destination (`alyx-server`, `user@host`). Must work with BatchMode (no prompts). */
+	ssh: string;
+	/** `omp` binary on the peer. `~/` is expanded there. */
+	ompBin: string;
+	/** Session directory on the peer (default `~/.omp/agent/sessions`). */
+	sessionsDir: string;
+	/** Image blob directory on the peer (default `~/.omp/agent/blobs`). */
+	blobsDir: string;
+	/** Also mirror each synced session's project folder (`cwd`), when it is inside `roots` and not a root itself. */
+	syncProjects: boolean;
+	/** Background sync period; 0 syncs only on turn end, session close, and startup. */
+	intervalSec: number;
+}
+
 export interface Config {
 	/** Display name shown in the app. */
 	name: string;
@@ -41,6 +60,8 @@ export interface Config {
 	tui: { enabled: boolean; control: boolean };
 	/** Concurrent guest sockets per client IP on the LAN relay (the loopback relay allows 64). */
 	lanMaxGuestsPerIp: number;
+	/** Optional companion PC to mirror sessions to; absent = no sync. */
+	peer?: PeerConfig;
 }
 
 export function defaultConfig(): Config {
@@ -112,6 +133,24 @@ function validateRelayUrl(u: string): string {
 	return u.replace(/\/+$/, "");
 }
 
+function parsePeer(raw: unknown): PeerConfig | undefined {
+	if (raw === undefined || raw === null) return undefined;
+	if (!isRecord(raw)) throw new Error("config: peer must be an object");
+	onlyKeys(raw, ["ssh", "ompBin", "sessionsDir", "blobsDir", "syncProjects", "intervalSec"], "peer.");
+	const ssh = optStr(raw.ssh, "peer.ssh");
+	if (!ssh) throw new Error("config: peer.ssh is required (for example \"alyx-server\" or \"user@host\")");
+	// An SSH target starting with `-` would be parsed as an ssh/rsync option.
+	if (!/^[A-Za-z0-9_][A-Za-z0-9_.@:\-\[\]]*$/.test(ssh)) throw new Error(`config: peer.ssh is not a valid SSH destination: ${JSON.stringify(ssh)}`);
+	return {
+		ssh,
+		ompBin: optStr(raw.ompBin, "peer.ompBin") ?? "~/.local/bin/omp",
+		sessionsDir: optStr(raw.sessionsDir, "peer.sessionsDir") ?? "~/.omp/agent/sessions",
+		blobsDir: optStr(raw.blobsDir, "peer.blobsDir") ?? "~/.omp/agent/blobs",
+		syncProjects: bool(raw.syncProjects, true, "peer.syncProjects"),
+		intervalSec: int(raw.intervalSec, 0, "peer.intervalSec", 0, 86_400),
+	};
+}
+
 function onlyKeys(o: Record<string, unknown>, allowed: string[], where: string): void {
 	for (const k of Object.keys(o)) if (!allowed.includes(k)) throw new Error(`config: unknown key ${where}${k}`);
 }
@@ -121,7 +160,7 @@ export function parseConfig(raw: unknown): Config {
 	const d = defaultConfig();
 	if (raw === undefined) return d;
 	if (!isRecord(raw)) throw new Error("config: top level must be an object");
-	onlyKeys(raw, ["name", "relays", "lan", "localPort", "lanPort", "lanAddress", "roots", "omp", "defaultApprovalMode", "allowedApprovalModes", "inhibitSleepWhileWorking", "fcm", "maxManagedSessions", "tui", "lanMaxGuestsPerIp"], "");
+	onlyKeys(raw, ["name", "relays", "lan", "localPort", "lanPort", "lanAddress", "roots", "omp", "defaultApprovalMode", "allowedApprovalModes", "inhibitSleepWhileWorking", "fcm", "maxManagedSessions", "tui", "lanMaxGuestsPerIp", "peer"], "");
 	const omp = raw.omp === undefined ? {} : raw.omp;
 	if (!isRecord(omp)) throw new Error("config: omp must be an object");
 	const fcm = raw.fcm === undefined ? {} : raw.fcm;
@@ -165,6 +204,8 @@ export function parseConfig(raw: unknown): Config {
 	};
 	const lanAddress = optStr(raw.lanAddress, "lanAddress");
 	if (lanAddress) cfg.lanAddress = lanAddress;
+	const peer = parsePeer(raw.peer);
+	if (peer) cfg.peer = peer;
 	const sessionsDir = optStr(omp.sessionsDir, "omp.sessionsDir");
 	if (sessionsDir) cfg.omp.sessionsDir = sessionsDir;
 	const sessionDir = optStr(omp.sessionDir, "omp.sessionDir");

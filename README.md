@@ -52,7 +52,11 @@ Verified on real hardware (Pixel 7) and an emulator, against real omp:
 - attaching to a live TUI session and prompting it from the phone;
 - the Cloudflare Worker, deployed and contract-tested over real TLS.
 
-Tests: bridge 201, relay 24, Android 51, plus shared crypto vectors that every client must reproduce.
+Tests: bridge 209, relay 24, Android 51, plus shared crypto vectors that every client must reproduce.
+
+**Peer sync** (`peer` in the bridge config, `ompr sync`) mirrors sessions, image blobs and project folders to an always-on second PC over SSH + rsync, so a session can be continued from the phone while the main PC is off.
+The planner and the project-folder guard are unit-tested. A live run against a second machine pushed 74 real sessions (254 transcripts, 10,118 blobs, identical counts on both sides) and the next run was incremental.
+Opening a mirrored session on the second machine from the phone has not been tried yet: that machine still needs its own omp login. Details and rules: [`bridge/README.md`](bridge/README.md#peer-sync-keep-working-while-this-pc-is-off).
 
 **Phone-as-agent-tools** (location, clipboard, notifications, camera; every tool Off until the user enables it) work end to end on a Pixel 7 against real omp: the agent sent a
 notification, read a real location fix, wrote and read back the clipboard, and received and described a camera photo. A call that arrives while the app is closed posts a notification that

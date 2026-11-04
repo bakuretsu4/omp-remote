@@ -6,11 +6,12 @@ import { execFile } from "node:child_process";
 import { chmodSync, existsSync, unlinkSync } from "node:fs";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { networkInterfaces } from "node:os";
+import { dirname, join } from "node:path";
 import { PROTO, type HostInfo } from "../../protocol/src/index.ts";
 import { startRelay, type RunningRelay } from "../../relay/src/node.ts";
 import { AttentionInbox } from "./attention.ts";
 import { Channel, NonceCache, newPeerCounters, type PeerCounters } from "./channel.ts";
-import { paths, type Config } from "./config.ts";
+import { ompSessionsDir, paths, type Config } from "./config.ts";
 import { DeviceStore } from "./devices.ts";
 import { Dispatcher } from "./dispatcher.ts";
 import { HostToolRouter } from "./hosttools.ts";
@@ -23,6 +24,7 @@ import { PushSender } from "./push.ts";
 import { RelayConnection } from "./relay-client.ts";
 import { assertPrivateDir, ensurePrivateDir, resolveRoots } from "./safefs.ts";
 import { SessionRegistry } from "./sessions.ts";
+import { PeerSync } from "./sync.ts";
 import { TuiDiscovery } from "./tui/index.ts";
 import { UploadManager } from "./uploads.ts";
 
@@ -78,6 +80,7 @@ export class BridgeDaemon {
 	#tick: NodeJS.Timeout | undefined;
 	#discovery: { stop(): Promise<void> } | undefined;
 	#uploads: UploadManager | undefined;
+	#peerSync: PeerSync | undefined;
 	#hostTools!: HostToolRouter;
 	#stopped = false;
 
@@ -202,8 +205,30 @@ export class BridgeDaemon {
 		this.#tick.unref();
 
 		if (cfg.tui.enabled) await this.#startTui(blobs);
+		if (cfg.peer) this.#startPeerSync(cfg.peer);
 		await this.#listenControl();
 		this.log(`ompr ready: host ${this.identity.hostId}, room ${this.identity.roomId.slice(0, 4)}…, ${this.devices.list().filter(d => !d.revoked).length} paired device(s)`);
+	}
+
+	#startPeerSync(peer: NonNullable<Config["peer"]>): void {
+		const sessionsDir = ompSessionsDir(this.config);
+		const sync = new PeerSync({
+			peer,
+			localOmpBin: this.config.omp.bin,
+			localSessionsDir: sessionsDir,
+			localBlobsDir: join(dirname(sessionsDir), "blobs"),
+			roots: () => this.#roots,
+			liveSessionFiles: () => this.registry.liveFiles(),
+			log: this.log,
+		});
+		// A finished turn or a closed session is when the transcript on disk is worth mirroring.
+		this.registry.on("event", (_sid: string, _seq: number, e: { k: string }) => {
+			if (e.k === "agent.end") sync.notifyActivity();
+		});
+		this.registry.on("removed", () => sync.notifyActivity());
+		this.#peerSync = sync;
+		sync.start();
+		this.log(`peer sync: mirroring sessions to ${peer.ssh}${peer.syncProjects ? " (with project folders)" : ""}`);
 	}
 
 	async #startTui(blobs: CountingBlobStore): Promise<void> {
@@ -454,6 +479,7 @@ export class BridgeDaemon {
 			devices: this.devices.list().filter(d => !d.revoked).length,
 			sessions: this.registry.list().map(s => ({ sid: s.sid, kind: s.kind, status: s.status, title: s.title, cwd: s.cwd })),
 			push: this.push.enabled,
+			peer: this.config.peer ? { ssh: this.config.peer.ssh, last: this.#peerSync?.lastReport ?? null } : null,
 			lan: this.config.lan,
 			tuiControl: this.config.tui.enabled ? (this.config.tui.control ? "control" : "view-only") : "off",
 			allowedApprovalModes: this.config.allowedApprovalModes,
@@ -475,6 +501,7 @@ export class BridgeDaemon {
 		await this.#discovery?.stop().catch(() => {});
 		await this.registry?.closeAll();
 		await this.#uploads?.closeAll();
+		await this.#peerSync?.stop();
 		for (const ch of this.#channels.values()) ch.close("shutdown");
 		for (const r of this.#relays) r.stop();
 		await Promise.all(this.#embedded.map(r => r.close().catch(() => {})));
