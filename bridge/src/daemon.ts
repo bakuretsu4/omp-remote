@@ -67,6 +67,8 @@ export class BridgeDaemon {
 	pairing!: PairingManager;
 	dispatcher!: Dispatcher;
 	push!: PushSender;
+	/** Capabilities advertised in `host.info`; a feature module adds its name when it is ready to serve its ops. */
+	readonly features = new Set<string>();
 
 	readonly #startedAt = Date.now();
 	readonly #channels = new Map<string, Channel>();
@@ -111,6 +113,7 @@ export class BridgeDaemon {
 			roots: this.#roots,
 			push: this.push.enabled,
 			approvalModes: this.config.allowedApprovalModes,
+			features: [...this.features],
 			now: Date.now(),
 		};
 	}

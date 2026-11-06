@@ -332,6 +332,23 @@ export class Dispatcher {
 				return {};
 			},
 
+			// Replaced by their feature modules; until then a bridge answers "unsupported" and does not list them in host.info features.
+			"peer.sync": () => {
+				throw unsupported("this bridge has no peer configured");
+			},
+			"usage.get": () => {
+				throw unsupported("usage is not available on this bridge");
+			},
+			"fs.read": () => {
+				throw unsupported("file reading is not available on this bridge");
+			},
+			"git.status": () => {
+				throw unsupported("git is not available on this bridge");
+			},
+			"git.diff": () => {
+				throw unsupported("git is not available on this bridge");
+			},
+
 			"sessions.list": async (_c, a) => {
 				const recent = obj(a).recent;
 				if (recent !== undefined && (!Number.isInteger(recent) || (recent as number) < 0)) throw invalid("recent must be a non-negative integer");

@@ -40,6 +40,8 @@ export interface HostInfo {
 	push: boolean;
 	/** Approval modes this PC accepts for sessions started or changed from a phone. Absent on older bridges: assume all. */
 	approvalModes?: ApprovalMode[];
+	/** Optional capabilities this bridge offers: "peer-sync", "usage", "files", "git". Absent on older bridges: assume none. */
+	features?: string[];
 	now: number;
 }
 
@@ -227,6 +229,40 @@ export interface CreateSessionArgs {
 	hostTools?: boolean;
 }
 
+/** One quota window of one account, from `omp usage`. `usedFraction` is 0..1 or null when the provider does not say. */
+export interface UsageLimit {
+	id: string;
+	label: string;
+	/** Provider status word, passed through ("ok", "warning", "exhausted", ...). */
+	status: string;
+	usedFraction: number | null;
+	/** Epoch ms when the window resets, or null. */
+	resetsAt: number | null;
+}
+
+export interface UsageAccount {
+	provider: string;
+	email?: string;
+	org?: string;
+	limits: UsageLimit[];
+}
+
+export interface UsageResult { generatedAt: number; accounts: UsageAccount[] }
+
+export interface SyncSummary {
+	pushedSessions: number;
+	pulledSessions: number;
+	pushedProjects: number;
+	pulledProjects: number;
+	durationMs: number;
+}
+
+/** `text` is present only for text files; binary files report `binary: true` and no text. */
+export interface FsReadResult { path: string; size: number; truncated: boolean; binary: boolean; text?: string }
+
+/** `status` is the two-character `git status --porcelain=v1` code, e.g. " M", "??", "A ". */
+export interface GitStatusResult { root: string; branch: string | null; files: { path: string; status: string }[] }
+
 export interface PromptArgs {
 	sid: string;
 	message: string;
@@ -246,6 +282,13 @@ export interface Ops {
 	"push.register": { a: { provider: "fcm"; token: string }; d: {} };
 	"devices.list": { a: {}; d: { devices: { did: string; label: string; lastSeen: number; current: boolean }[] } };
 	"devices.revoke": { a: { did: string }; d: {} };
+
+	// peer sync, usage, files (each is advertised in HostInfo.features)
+	"peer.sync": { a: {}; d: SyncSummary };
+	"usage.get": { a: {}; d: UsageResult };
+	"fs.read": { a: { path: string; maxBytes?: number }; d: FsReadResult };
+	"git.status": { a: { path: string }; d: GitStatusResult };
+	"git.diff": { a: { path: string; file?: string; staged?: boolean }; d: { diff: string; truncated: boolean } };
 
 	// sessions
 	"sessions.list": { a: { recent?: number }; d: { sessions: SessionSummary[] } };

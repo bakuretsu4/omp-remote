@@ -160,6 +160,7 @@ data class HostInfo(
     val roots: List<String> = emptyList(),
     val push: Boolean = false,
     val approvalModes: List<String>? = null,
+    val features: List<String>? = null,
     @Serializable(with = FlexLong::class) val now: Long = 0,
 )
 
