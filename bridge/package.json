@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node src/cli.ts run",
-    "test": "node --test test/",
+    "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

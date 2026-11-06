@@ -15,17 +15,20 @@ concurrency:
 jobs:
   bridge:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: bridge
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - run: npm ci
+        working-directory: bridge
+      # The bridge embeds the relay and imports its source, so the relay's dependencies must be installed too.
+      - run: npm ci
+        working-directory: relay
       - run: npm run typecheck
+        working-directory: bridge
       - run: npm test
+        working-directory: bridge
 
   relay:
     runs-on: ubuntu-latest
@@ -52,7 +55,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      # The runner image ships the Android SDK with licenses accepted; Gradle fetches anything missing.
       - uses: gradle/actions/setup-gradle@v4
       # An unsigned release build proves R8/shrinking still works without needing any secret.
       - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease

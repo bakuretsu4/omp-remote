@@ -6,7 +6,7 @@
   "description": "Blind WebSocket relay for OMP Remote (PROTOCOL.md §2)",
   "scripts": {
     "start": "node src/cli.ts",
-    "test": "node --test test/",
+    "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
     "deploy": "wrangler deploy"
   },

@@ -14,6 +14,46 @@ export JAVA_HOME=~/toolchain/jdk ANDROID_HOME=~/toolchain/android-sdk
 `app/src/test/resources/test-vectors.json` is a copy of `../protocol/test-vectors.json`; `VectorsTest` reproduces every
 vector (keys, AAD, framed payloads, hostId, roomId). Re-copy it when the protocol vectors change.
 
+## Releasing
+
+A release build is minified (R8) and signed. The version comes from the tag, and `versionCode = major*10000 + minor*100 + patch`.
+
+**Signing key (once).** Keep the keystore *outside* the repo and **back it up**: if you lose it, installed apps can never be updated, only reinstalled
+(which wipes their paired PCs). Create it and a git-ignored `android/keystore.properties`:
+
+```sh
+keytool -genkeypair -storetype PKCS12 -keystore ~/.config/ompr-release/ompr-release.jks -alias ompr-release \
+  -keyalg RSA -keysize 4096 -validity 10950 -dname "CN=OMP Remote"
+printf 'storeFile=%s\nstorePassword=...\nkeyAlias=ompr-release\nkeyPassword=...\n' ~/.config/ompr-release/ompr-release.jks > android/keystore.properties
+```
+
+With any of `storeFile storePassword keyAlias keyPassword` (or `OMPR_KEYSTORE_FILE OMPR_KEYSTORE_PASSWORD OMPR_KEY_ALIAS OMPR_KEY_PASSWORD`)
+missing, `assembleRelease` makes an unsigned APK instead of failing (that is what CI does on pull requests).
+
+**Local build and check:**
+
+```sh
+OMPR_VERSION=0.2.0 ./gradlew :app:assembleRelease          # app/build/outputs/apk/release/app-release.apk
+$ANDROID_HOME/build-tools/35.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+```
+
+**Try a release build safely** next to your real app (its own package, its own pairings) with `-PomprAppIdSuffix=.rc`.
+
+**Publish with GitHub Actions** (`.github/workflows/release.yml`): add four repository secrets, then push a tag.
+
+```sh
+base64 -w0 ~/.config/ompr-release/ompr-release.jks | gh secret set OMPR_KEYSTORE_BASE64
+gh secret set OMPR_KEYSTORE_PASSWORD   # and OMPR_KEY_ALIAS (ompr-release), OMPR_KEY_PASSWORD
+gh variable set OMPR_CERT_SHA256 --body "<fingerprint from apksigner or keytool>"   # optional: abort if the wrong key signs
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+The workflow runs the unit tests, builds, checks the signature (and the pinned fingerprint if set) and attaches
+`omp-remote-<version>.apk` plus a `.sha256` file to a GitHub Release.
+
+**Installing over a debug build.** A debug and a release build are signed with different keys, so Android refuses to update one with the other:
+uninstall the debug app first. That deletes its stored PC keys, so pair each PC again.
+
 ## Layout
 
 | Package | What |

@@ -21,7 +21,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      # The runner image ships the Android SDK with licenses accepted; Gradle fetches anything missing.
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build the signed release APK
