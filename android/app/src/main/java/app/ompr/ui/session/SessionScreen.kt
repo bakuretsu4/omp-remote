@@ -1,5 +1,30 @@
 package app.ompr.ui.session
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.heading
+import app.ompr.ui.common.EmptyState
+import app.ompr.ui.common.LocalSnack
+import app.ompr.ui.common.PcTag
+import app.ompr.ui.common.rememberHostColorIndex
+import app.ompr.ui.common.rememberHostName
+import app.ompr.ui.common.shortPath
+import app.ompr.ui.theme.Dimens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -152,20 +177,13 @@ fun SessionScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
-            TopAppBar(
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f, fill = false)) {
-                            Text(view.title.ifBlank { "Session" }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                            view.summary?.cwd?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        }
-                        view.summary?.let {
-                            Spacer(Modifier.size(8.dp))
-                            StatusChip(if (view.closed) "offline" else if (view.busy) "working" else it.status, pending = view.pendingUi.size)
-                        }
-                    }
-                },
+            SessionHeader(
+                title = view.title,
+                cwd = view.summary?.cwd,
+                hostId = hostId,
+                status = view.summary?.let { if (view.closed) "offline" else if (view.busy) "working" else it.status },
+                pending = view.pendingUi.size,
+                onBack = onBack,
                 actions = {
                     IconButton(onClick = { showSettings = true }, enabled = view.summary != null) { Icon(Icons.Filled.Tune, "Session settings") }
                     SessionFilesMenu(conn, view.summary?.cwd, onOpenFiles, onOpenChanges)
@@ -184,14 +202,14 @@ fun SessionScreen(
                 else -> {
                     if (ph is SessionPhase.Closed) {
                         Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
-                            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.padding(horizontal = Dimens.lg, vertical = Dimens.sm), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.WarningAmber, null, Modifier.size(18.dp))
-                                Spacer(Modifier.size(8.dp))
+                                Spacer(Modifier.size(Dimens.sm))
                                 Text("Session ended${ph.reason.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""}", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
-                    StatusBar(view)
+                    StatusBar(view, onOpen = { showSettings = true })
                     if (view.busy && view.pendingUi.isEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                     TodoGoalPanel(view)
                     SubagentPanel(
@@ -201,38 +219,49 @@ fun SessionScreen(
                     )
                     for (n in view.notices.takeLast(1)) {
                         if (n.level != "info" && System.currentTimeMillis() - n.at < 15_000) {
-                            Text(n.message, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = if (n.level == "error") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary)
+                            Text(n.message, Modifier.fillMaxWidth().padding(horizontal = Dimens.lg, vertical = Dimens.xs), style = MaterialTheme.typography.bodySmall, color = if (n.level == "error") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary)
                         }
                     }
 
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         PullToRefreshBox(isRefreshing = false, onRefresh = { scope.launch { runCatching { handle.refresh() } } }, modifier = Modifier.fillMaxSize()) {
                             if (rows.isEmpty()) {
-                                Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                                    Text("No messages yet. Send the first one below.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
+                                EmptyState(
+                                    title = "No messages yet",
+                                    body = if (view.can(app.ompr.data.Cap.PROMPT) && !view.closed) "Send the first message below to start." else "Nothing has been said in this session.",
+                                )
                             } else {
-                                LazyColumn(
-                                    Modifier.fillMaxSize().semantics { contentDescription = "Conversation" },
-                                    state = listState,
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    if (view.hasMore) item(key = "more") {
-                                        Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                                            if (view.loadingMore) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                                            else TextButton(onClick = { scope.launch { runCatching { handle.loadOlder() } } }) { Text("Load earlier messages") }
+                                CompositionLocalProvider(LocalSnack provides snack) {
+                                    LazyColumn(
+                                        Modifier.fillMaxSize().semantics { contentDescription = "Conversation" },
+                                        state = listState,
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Dimens.md + Dimens.xxs, vertical = Dimens.md),
+                                        verticalArrangement = Arrangement.spacedBy(Dimens.cardGap),
+                                    ) {
+                                        if (view.hasMore) item(key = "more") {
+                                            Box(Modifier.fillMaxWidth().padding(Dimens.sm), contentAlignment = Alignment.Center) {
+                                                if (view.loadingMore) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                                                else TextButton(onClick = { scope.launch { runCatching { handle.loadOlder() } } }) { Text("Load earlier messages") }
+                                            }
                                         }
+                                        items(rows, key = { it.key }) { r -> TranscriptRow(r, view, handle, conn) }
                                     }
-                                    items(rows, key = { it.key }) { r -> TranscriptRow(r, view, handle, conn) }
                                 }
                             }
                         }
-                        if (!stick && rows.isNotEmpty()) {
-                            SmallFloatingActionButton(
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = !stick && rows.isNotEmpty(),
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(Dimens.lg),
+                            enter = fadeIn() + scaleIn(),
+                            exit = fadeOut() + scaleOut(),
+                        ) {
+                            ExtendedFloatingActionButton(
                                 onClick = { stick = true; scope.launch { listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1) } },
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                            ) { Icon(Icons.Filled.KeyboardArrowDown, "Jump to latest") }
+                                icon = { Icon(Icons.Filled.KeyboardArrowDown, null) },
+                                text = { Text("Jump to latest") },
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
                         }
                     }
 
@@ -241,7 +270,7 @@ fun SessionScreen(
                             color = MaterialTheme.colorScheme.tertiaryContainer,
                             modifier = Modifier.fillMaxWidth().clickable { dismissedFor = null; sheetFor = first.reqId }.testTag("pending_bar"),
                         ) {
-                            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.padding(horizontal = Dimens.lg, vertical = Dimens.md), verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     if (pending.size == 1) "The agent is waiting for you" else "${pending.size} requests are waiting for you",
                                     style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f),
@@ -308,6 +337,7 @@ fun SessionScreen(
     if (req != null) {
         RequestSheet(
             request = req,
+            hostId = hostId,
             position = pending.indexOf(req) + 1,
             total = pending.size,
             busy = answering,
@@ -336,4 +366,48 @@ fun SessionScreen(
         )
     }
     if (showSettings) SessionSettingsSheet(view, handle, actions, onDismiss = { showSettings = false })
+}
+
+/**
+ * The session's top bar: back, a title of up to two lines, the PC it runs on and its status underneath, then the
+ * [actions]. Taller than a stock app bar so nothing has to be cut to one line.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SessionHeader(
+    title: String,
+    cwd: String?,
+    hostId: String,
+    status: String?,
+    pending: Int,
+    onBack: () -> Unit,
+    actions: @Composable () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Row(
+            Modifier
+                .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
+                .heightIn(min = 64.dp)
+                .padding(horizontal = Dimens.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+            Column(Modifier.weight(1f).padding(vertical = Dimens.sm), verticalArrangement = Arrangement.spacedBy(Dimens.xs)) {
+                Text(
+                    title.ifBlank { "Session" },
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { heading() },
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Dimens.sm), verticalArrangement = Arrangement.spacedBy(Dimens.xs)) {
+                    PcTag(rememberHostName(hostId), rememberHostColorIndex(hostId))
+                    if (status != null) StatusChip(status, pending = pending)
+                }
+                if (!cwd.isNullOrBlank()) {
+                    Text(shortPath(cwd), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            actions()
+        }
+    }
 }

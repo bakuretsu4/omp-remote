@@ -1,5 +1,40 @@
 package app.ompr.ui.settings
 
+import android.os.Build
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudQueue
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.QuestionAnswer
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
+import app.ompr.ui.theme.Dimens
+import app.ompr.ui.theme.OmprShapes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -70,49 +105,111 @@ import app.ompr.ui.newsession.approvalHint
 import app.ompr.ui.newsession.approvalLabel
 import kotlinx.coroutines.launch
 
+private val RowMinHeight = 56.dp
+
+/** A titled block of rows on a tonal card. [description] sits between the title and the card. */
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 4.dp, end = 16.dp))
+private fun SettingsSection(title: String, description: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.screen)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = Dimens.sm, top = Dimens.xl, bottom = Dimens.sm).semantics { heading() },
+        )
+        if (description != null) {
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = Dimens.sm, end = Dimens.sm, bottom = Dimens.sm),
+            )
+        }
+        Surface(shape = OmprShapes.card, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+            Column(content = content)
+        }
+    }
 }
 
 @Composable
-private fun SwitchRow(title: String, subtitle: String?, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+private fun rowColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
+
+@Composable
+private fun RowIcon(icon: ImageVector) {
+    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onChange: (Boolean) -> Unit,
+) {
+    val alpha = if (enabled) 1f else 0.5f
     Row(
-        Modifier.fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange).padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier.fillMaxWidth().heightIn(min = RowMinHeight)
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+            .padding(horizontal = Dimens.lg, vertical = Dimens.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        if (icon != null) {
+            Box(Modifier.alpha(alpha)) { RowIcon(icon) }
+            Spacer(Modifier.size(Dimens.lg))
+        }
+        Column(Modifier.weight(1f).alpha(alpha)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Spacer(Modifier.size(12.dp))
+        Spacer(Modifier.size(Dimens.md))
         Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
+private fun toolIcon(cap: String): ImageVector = when (cap) {
+    "location" -> Icons.Filled.LocationOn
+    "clipboard" -> Icons.Filled.ContentPaste
+    "notify" -> Icons.Filled.Notifications
+    "camera" -> Icons.Filled.PhotoCamera
+    else -> Icons.Filled.Smartphone
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ToolModeRow(spec: PhoneToolSpec, mode: ToolMode, onChange: (ToolMode) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(spec.title, style = MaterialTheme.typography.bodyLarge)
-        Text(spec.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (m in spec.allowedModes) {
-                androidx.compose.material3.FilterChip(
-                    selected = mode == m,
-                    onClick = { onChange(m) },
-                    label = {
-                        Text(
-                            when (m) {
-                                ToolMode.OFF -> "Off"
-                                ToolMode.ASK -> "Ask each time"
-                                ToolMode.ALLOW -> "Always allow"
-                            },
-                        )
-                    },
-                )
+    Row(Modifier.fillMaxWidth().heightIn(min = RowMinHeight).padding(horizontal = Dimens.lg, vertical = Dimens.md)) {
+        RowIcon(toolIcon(spec.cap))
+        Spacer(Modifier.size(Dimens.lg))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
+            Text(spec.title, style = MaterialTheme.typography.bodyLarge)
+            Text(spec.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
+                for (m in spec.allowedModes) {
+                    androidx.compose.material3.FilterChip(
+                        selected = mode == m,
+                        onClick = { onChange(m) },
+                        label = {
+                            Text(
+                                when (m) {
+                                    ToolMode.OFF -> "Off"
+                                    ToolMode.ASK -> "Ask each time"
+                                    ToolMode.ALLOW -> "Always allow"
+                                },
+                            )
+                        },
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun RowDivider() {
+    HorizontalDivider(Modifier.padding(horizontal = Dimens.lg), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,6 +222,7 @@ fun SettingsScreen(onBack: () -> Unit, onHostSettings: (String) -> Unit) {
     val snack = remember { SnackbarHostState() }
     val keep by settings.keepConnected.collectAsState(false)
     val bio by settings.biometricLock.collectAsState(false)
+    val dynamic by settings.dynamicColor.collectAsState(initial = true)
     val defaultApproval by settings.defaultApprovalMode.collectAsState(ApprovalModes.ALWAYS_ASK)
     val hosts by graph.hosts.hosts.collectAsState()
     var approvalDialog by remember { mutableStateOf(false) }
@@ -134,99 +232,155 @@ fun SettingsScreen(onBack: () -> Unit, onHostSettings: (String) -> Unit) {
         topBar = { TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }) },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState())) {
-            SectionTitle("Connection")
-            SwitchRow(
-                "Keep connected", "Stay connected to your PCs in the background and notify you about approvals, questions and finished work. Shows a persistent low-priority notification.",
-                keep,
-            ) { v -> scope.launch { settings.setKeepConnected(v) } }
-
-            SectionTitle("Security")
-            SwitchRow(
-                "Biometric lock", "Require fingerprint, face or screen lock to open the app and before approving anything.",
-                bio,
-            ) { v ->
-                scope.launch {
-                    if (!graph.gate.isAvailable(activity)) {
-                        snack.showSnackbar("Set up a screen lock or biometrics in Android settings first")
-                        return@launch
-                    }
-                    // Turning it on (or off) needs a successful authentication so a borrowed unlocked phone can't disable it.
-                    if (graph.gate.authenticate(activity, if (v) "Enable biometric lock" else "Disable biometric lock")) settings.setBiometricLock(v)
-                }
-            }
-
-            val hide by settings.hideInRecents.collectAsState(true)
-            SwitchRow(
-                "Hide content in recents", "Blank the app in the recent-apps switcher and block screenshots, so approvals and commands are not captured.",
-                hide,
-            ) { v -> scope.launch { settings.setHideInRecents(v) } }
-
-            SectionTitle("Notifications")
-            for (kind in AttentionKinds.all) {
-                val on by settings.notifyEnabled(kind).collectAsState(true)
+            SettingsSection("Appearance") {
+                val dynamicSupported = Build.VERSION.SDK_INT >= 31
                 SwitchRow(
-                    when (kind) {
-                        AttentionKinds.APPROVAL -> "Approval needed"
-                        AttentionKinds.QUESTION -> "Questions"
-                        AttentionKinds.DONE -> "Finished"
-                        AttentionKinds.ERROR -> "Errors"
-                        else -> "Usage limits"
-                    },
-                    null, on,
-                ) { v -> scope.launch { settings.setNotifyEnabled(kind, v) } }
+                    "Dynamic colour (Material You)",
+                    if (dynamicSupported) "Use your wallpaper colours on Android 12+. Off uses the built-in palette."
+                    else "Needs Android 12 or newer. This phone uses the built-in palette.",
+                    dynamicSupported && dynamic,
+                    icon = Icons.Filled.Palette,
+                    enabled = dynamicSupported,
+                    modifier = Modifier.testTag("dynamic_colour_switch"),
+                ) { v -> scope.launch { settings.setDynamicColor(v) } }
             }
 
-            SectionTitle("Phone tools")
-            Text(
-                "Let an agent use your phone. Every tool is off until you choose, and only sessions you start with “Let the agent use my phone” can call them. " +
-                    "“Ask each time” confirms every call. Clipboard reading, location and the camera work only while this app is open; if the agent asks while it is closed you get a notification to tap.",
-                Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            for (spec in PhoneTools.all) {
-                val mode by settings.hostToolMode(spec.id).collectAsState(ToolMode.OFF)
-                ToolModeRow(spec, mode) { m ->
+            SettingsSection("Connection") {
+                SwitchRow(
+                    "Keep connected", "Stay connected to your PCs in the background and notify you about approvals, questions and finished work. Shows a persistent low-priority notification.",
+                    keep, icon = Icons.Filled.Sync,
+                ) { v -> scope.launch { settings.setKeepConnected(v) } }
+            }
+
+            SettingsSection("Security") {
+                SwitchRow(
+                    "Biometric lock", "Require fingerprint, face or screen lock to open the app and before approving anything.",
+                    bio, icon = Icons.Filled.Fingerprint,
+                ) { v ->
                     scope.launch {
-                        // Making a tool permanent needs the same authentication as the biometric lock, so a borrowed phone cannot grant it.
-                        if (m == ToolMode.ALLOW && !graph.gate.guard(activity, "Always allow ${spec.title}")) return@launch
-                        settings.setHostToolMode(spec.id, m)
+                        if (!graph.gate.isAvailable(activity)) {
+                            snack.showSnackbar("Set up a screen lock or biometrics in Android settings first")
+                            return@launch
+                        }
+                        // Turning it on (or off) needs a successful authentication so a borrowed unlocked phone can't disable it.
+                        if (graph.gate.authenticate(activity, if (v) "Enable biometric lock" else "Disable biometric lock")) settings.setBiometricLock(v)
+                    }
+                }
+
+                RowDivider()
+                val hide by settings.hideInRecents.collectAsState(true)
+                SwitchRow(
+                    "Hide content in recents", "Blank the app in the recent-apps switcher and block screenshots, so approvals and commands are not captured.",
+                    hide, icon = Icons.Filled.VisibilityOff,
+                ) { v -> scope.launch { settings.setHideInRecents(v) } }
+            }
+
+            SettingsSection("Notifications") {
+                AttentionKinds.all.forEachIndexed { i, kind ->
+                    if (i > 0) RowDivider()
+                    val on by settings.notifyEnabled(kind).collectAsState(true)
+                    SwitchRow(
+                        when (kind) {
+                            AttentionKinds.APPROVAL -> "Approval needed"
+                            AttentionKinds.QUESTION -> "Questions"
+                            AttentionKinds.DONE -> "Finished"
+                            AttentionKinds.ERROR -> "Errors"
+                            else -> "Usage limits"
+                        },
+                        null, on,
+                        icon = when (kind) {
+                            AttentionKinds.APPROVAL -> Icons.Filled.Security
+                            AttentionKinds.QUESTION -> Icons.Filled.QuestionAnswer
+                            AttentionKinds.DONE -> Icons.Filled.CheckCircle
+                            AttentionKinds.ERROR -> Icons.Filled.Error
+                            else -> Icons.Filled.Speed
+                        },
+                    ) { v -> scope.launch { settings.setNotifyEnabled(kind, v) } }
+                }
+            }
+
+            SettingsSection(
+                "Phone tools",
+                description = "Let an agent use your phone. Every tool is off until you choose, and only sessions you start with “Let the agent use my phone” can call them. " +
+                    "“Ask each time” confirms every call. Clipboard reading, location and the camera work only while this app is open; if the agent asks while it is closed you get a notification to tap.",
+            ) {
+                PhoneTools.all.forEachIndexed { i, spec ->
+                    if (i > 0) RowDivider()
+                    val mode by settings.hostToolMode(spec.id).collectAsState(ToolMode.OFF)
+                    ToolModeRow(spec, mode) { m ->
+                        scope.launch {
+                            // Making a tool permanent needs the same authentication as the biometric lock, so a borrowed phone cannot grant it.
+                            if (m == ToolMode.ALLOW && !graph.gate.guard(activity, "Always allow ${spec.title}")) return@launch
+                            settings.setHostToolMode(spec.id, m)
+                        }
                     }
                 }
             }
 
-            SectionTitle("New sessions")
-            ListItem(
-                headlineContent = { Text("Default approval mode") },
-                supportingContent = { Text("${approvalLabel(defaultApproval)} — ${approvalHint(defaultApproval)}") },
-                modifier = Modifier.clickable { approvalDialog = true },
-            )
-
-            SectionTitle("PCs")
-            if (hosts.isEmpty()) Text("No PC paired yet.", Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            for (h in hosts) {
+            SettingsSection("New sessions") {
                 ListItem(
-                    headlineContent = { Text(h.name) },
-                    supportingContent = { Text("Relays, paired devices") },
-                    leadingContent = { Icon(Icons.Filled.Computer, null) },
-                    modifier = Modifier.clickable { onHostSettings(h.hostId) },
+                    headlineContent = { Text("Default approval mode") },
+                    supportingContent = { Text("${approvalLabel(defaultApproval)} — ${approvalHint(defaultApproval)}") },
+                    leadingContent = { RowIcon(Icons.Filled.Tune) },
+                    colors = rowColors(),
+                    modifier = Modifier.heightIn(min = RowMinHeight).clickable { approvalDialog = true },
                 )
             }
 
-            SectionTitle("Push")
-            val pushAvail = PushTokens.available(graph.app)
-            Text(
-                if (pushAvail) "Push wake-ups are enabled in this build."
-                else "Push wake-ups are not enabled in this build (no google-services.json). Notifications arrive while the app is connected; turn on “Keep connected” for background delivery.",
-                Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            UnifiedPushSection()
+            SettingsSection("PCs") {
+                if (hosts.isEmpty()) {
+                    ListItem(
+                        headlineContent = { Text("No PC paired yet") },
+                        supportingContent = { Text("Pair a PC from the home screen to manage its relays and devices here.") },
+                        leadingContent = { RowIcon(Icons.Filled.Computer) },
+                        colors = rowColors(),
+                    )
+                }
+                hosts.forEachIndexed { i, h ->
+                    if (i > 0) RowDivider()
+                    ListItem(
+                        headlineContent = { Text(h.name) },
+                        supportingContent = { Text("Relays, paired devices") },
+                        leadingContent = { RowIcon(Icons.Filled.Computer) },
+                        colors = rowColors(),
+                        modifier = Modifier.heightIn(min = RowMinHeight).clickable { onHostSettings(h.hostId) },
+                    )
+                }
+            }
 
-            SectionTitle("About")
-            ListItem(headlineContent = { Text("OMP Remote") }, supportingContent = { Text("Version ${BuildConfig.VERSION_NAME} · protocol 1") })
-            Text(
-                "All traffic between this phone and your PC is end-to-end encrypted (P-256 ECDH, AES-256-GCM). The relay is blind.",
-                Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.size(32.dp))
+            SettingsSection("Push wake-ups") {
+                val pushAvail = PushTokens.available(graph.app)
+                ListItem(
+                    headlineContent = { Text(if (pushAvail) "Google push (FCM) is on" else "Google push (FCM) is off in this build") },
+                    supportingContent = {
+                        Text(
+                            if (pushAvail) "Wake-ups arrive through Google's push service."
+                            else "This build has no Google push (no google-services.json). Use the option below instead, or turn on “Keep connected” for background delivery.",
+                        )
+                    },
+                    leadingContent = { RowIcon(Icons.Filled.CloudQueue) },
+                    colors = rowColors(),
+                )
+                RowDivider()
+                UnifiedPushSection()
+            }
+
+            SettingsSection("About") {
+                ListItem(
+                    headlineContent = { Text("OMP Remote") },
+                    supportingContent = { Text("Version ${BuildConfig.VERSION_NAME} · protocol 1") },
+                    leadingContent = { RowIcon(Icons.Filled.Info) },
+                    colors = rowColors(),
+                )
+                RowDivider()
+                ListItem(
+                    headlineContent = { Text("End-to-end encrypted") },
+                    supportingContent = { Text("All traffic between this phone and your PC is end-to-end encrypted (P-256 ECDH, AES-256-GCM). The relay is blind.") },
+                    leadingContent = { RowIcon(Icons.Filled.Lock) },
+                    colors = rowColors(),
+                )
+            }
+            Spacer(Modifier.size(Dimens.xxl))
         }
     }
 
@@ -237,9 +391,9 @@ fun SettingsScreen(onBack: () -> Unit, onHostSettings: (String) -> Unit) {
             text = {
                 Column {
                     for (m in ApprovalModes.all) {
-                        Row(Modifier.fillMaxWidth().clickable { scope.launch { settings.setDefaultApprovalMode(m) }; approvalDialog = false }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = Dimens.touch).clickable { scope.launch { settings.setDefaultApprovalMode(m) }; approvalDialog = false }.padding(vertical = Dimens.sm), verticalAlignment = Alignment.CenterVertically) {
                             androidx.compose.material3.RadioButton(selected = defaultApproval == m, onClick = null)
-                            Spacer(Modifier.size(12.dp))
+                            Spacer(Modifier.size(Dimens.md))
                             Column { Text(approvalLabel(m)); Text(approvalHint(m), style = MaterialTheme.typography.bodySmall) }
                         }
                     }
@@ -284,52 +438,73 @@ fun HostSettingsScreen(hostId: String, onBack: () -> Unit) {
         Column(Modifier.padding(pad).fillMaxSize()) {
             ConnectionBanner(state, onRetry = { conn.reconnectNow() })
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                SectionTitle("Relays (tried in this order)")
-                val relays = host?.relays.orEmpty()
-                relays.forEachIndexed { i, url ->
-                    ListItem(
-                        headlineContent = { Text(url) },
-                        supportingContent = { Text(if (RelayUrls.isLan(url)) "LAN / private address" else "Internet relay") },
-                        trailingContent = {
-                            IconButton(
-                                enabled = relays.size > 1,
-                                onClick = { scope.launch { graph.hosts.update(hostId, relays = relays.filterIndexed { j, _ -> j != i }); conn.reconnectNow() } },
-                            ) { Icon(Icons.Filled.Delete, "Remove relay $url") }
-                        },
-                        modifier = Modifier.clickable { relayEdit = i },
-                    )
-                }
-                TextButton(onClick = { relayEdit = -1 }, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Icon(Icons.Filled.Add, null); Spacer(Modifier.size(8.dp)); Text("Add relay")
-                }
-                state.let { s -> if (s is ConnState.Connected) Text("Connected via ${s.relay}", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-
-                SectionTitle("Paired devices")
-                when {
-                    devices != null -> for (d in devices!!) {
+                SettingsSection("Relays (tried in this order)") {
+                    val relays = host?.relays.orEmpty()
+                    relays.forEachIndexed { i, url ->
+                        if (i > 0) RowDivider()
                         ListItem(
-                            headlineContent = { Text(d.label.ifBlank { d.did }) },
-                            supportingContent = { Text(if (d.current) "This phone" else "Last seen ${timeAgo(d.lastSeen).ifEmpty { "never" }}") },
-                            leadingContent = { Icon(Icons.Filled.Smartphone, null) },
+                            headlineContent = { Text(url) },
+                            supportingContent = { Text(if (RelayUrls.isLan(url)) "LAN / private address" else "Internet relay") },
+                            leadingContent = { RowIcon(if (RelayUrls.isLan(url)) Icons.Filled.Wifi else Icons.Filled.Cloud) },
                             trailingContent = {
-                                if (!d.current) IconButton(onClick = { revoking = d }) { Icon(Icons.Filled.Delete, "Revoke ${d.label}") }
+                                IconButton(
+                                    enabled = relays.size > 1,
+                                    onClick = { scope.launch { graph.hosts.update(hostId, relays = relays.filterIndexed { j, _ -> j != i }); conn.reconnectNow() } },
+                                ) { Icon(Icons.Filled.Delete, "Remove relay $url") }
                             },
+                            colors = rowColors(),
+                            modifier = Modifier.heightIn(min = RowMinHeight).clickable { relayEdit = i },
                         )
                     }
-                    devicesError != null -> Text(devicesError!!, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
-                    state is ConnState.Connected -> CircularProgressIndicator(Modifier.padding(16.dp))
-                    else -> Text("Connect to see paired devices.", Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(
-                    "Revoking a device cuts its access immediately. To revoke this phone, run `ompr revoke` on the PC.",
-                    Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                host?.let { h ->
-                    SectionTitle("Host")
-                    ListItem(headlineContent = { Text("Host id") }, supportingContent = { Text(h.hostId) })
-                    conn.info.collectAsState().value?.let { info ->
-                        ListItem(headlineContent = { Text("Bridge") }, supportingContent = { Text("v${info.bridgeVersion} · ${info.platform} · omp ${info.ompVersion ?: "not found"}") })
+                    TextButton(onClick = { relayEdit = -1 }, modifier = Modifier.padding(horizontal = Dimens.sm).heightIn(min = Dimens.touch)) {
+                        Icon(Icons.Filled.Add, null); Spacer(Modifier.size(Dimens.sm)); Text("Add relay")
                     }
+                    state.let { s -> if (s is ConnState.Connected) Text("Connected via ${s.relay}", Modifier.padding(horizontal = Dimens.lg, vertical = Dimens.sm), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+
+                SettingsSection("Paired devices") {
+                    when {
+                        devices != null && devices!!.isEmpty() -> Text("No paired devices.", Modifier.padding(Dimens.lg), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        devices != null -> devices!!.forEachIndexed { i, d ->
+                            if (i > 0) RowDivider()
+                            ListItem(
+                                headlineContent = { Text(d.label.ifBlank { d.did }) },
+                                supportingContent = { Text(if (d.current) "This phone" else "Last seen ${timeAgo(d.lastSeen).ifEmpty { "never" }}") },
+                                leadingContent = { RowIcon(Icons.Filled.Smartphone) },
+                                trailingContent = {
+                                    if (!d.current) IconButton(onClick = { revoking = d }) { Icon(Icons.Filled.Delete, "Revoke ${d.label.ifBlank { d.did }}") }
+                                },
+                                colors = rowColors(),
+                                modifier = Modifier.heightIn(min = RowMinHeight),
+                            )
+                        }
+                        devicesError != null -> Text(devicesError!!, Modifier.padding(Dimens.lg), color = MaterialTheme.colorScheme.error)
+                        state is ConnState.Connected -> Row(Modifier.padding(Dimens.lg), verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.size(Dimens.md))
+                            Text("Loading devices\u2026", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        else -> Text("Connect to see paired devices.", Modifier.padding(Dimens.lg), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(
+                        "Revoking a device cuts its access immediately. To revoke this phone, run `ompr revoke` on the PC.",
+                        Modifier.padding(Dimens.lg), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                host?.let { h ->
+                    SettingsSection("Host") {
+                        ListItem(headlineContent = { Text("Host id") }, supportingContent = { Text(h.hostId) }, leadingContent = { RowIcon(Icons.Filled.Computer) }, colors = rowColors())
+                        conn.info.collectAsState().value?.let { info ->
+                            RowDivider()
+                            ListItem(
+                                headlineContent = { Text("Bridge") },
+                                supportingContent = { Text("v${info.bridgeVersion} · ${info.platform} · omp ${info.ompVersion ?: "not found"}") },
+                                leadingContent = { RowIcon(Icons.Filled.Info) },
+                                colors = rowColors(),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.size(Dimens.xxl))
                 }
             }
         }

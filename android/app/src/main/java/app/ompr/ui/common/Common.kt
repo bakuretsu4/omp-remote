@@ -50,8 +50,6 @@ import app.ompr.net.HostConnection
 import app.ompr.net.OfflineHint
 import app.ompr.net.WireException
 import app.ompr.ui.theme.status
-import java.text.NumberFormat
-import java.util.Locale
 
 /** The process-wide graph; provided once in MainActivity. */
 val LocalGraph = staticCompositionLocalOf<AppGraph> { error("AppGraph not provided") }
@@ -84,6 +82,18 @@ fun rememberHostConnection(hostId: String): HostConnection {
         onStopOrDispose { hold.close() }
     }
     return conn
+}
+
+/** [rememberHostConnection] for several hosts at once (Home, PC list): every connection is held while STARTED. */
+@Composable
+fun rememberHostConnections(hostIds: List<String>): List<HostConnection> {
+    val graph = LocalGraph.current
+    val conns = remember(hostIds) { hostIds.map { graph.connections.get(it) } }
+    LifecycleStartEffect(hostIds) {
+        val holds = conns.map { it.acquire() }
+        onStopOrDispose { holds.forEach { it.close() } }
+    }
+    return conns
 }
 
 /** Human message for any failure coming out of the net layer. */
@@ -201,46 +211,3 @@ fun ErrorState(message: String, onRetry: (() -> Unit)?, modifier: Modifier = Mod
     )
 }
 
-// ───────────────────────── formatting ─────────────────────────
-
-fun timeAgo(ms: Long, now: Long = System.currentTimeMillis()): String {
-    if (ms <= 0) return ""
-    val d = (now - ms).coerceAtLeast(0) / 1000
-    return when {
-        d < 10 -> "just now"
-        d < 60 -> "${d}s ago"
-        d < 3600 -> "${d / 60}m ago"
-        d < 86400 -> "${d / 3600}h ago"
-        d < 86400 * 14 -> "${d / 86400}d ago"
-        else -> java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(ms))
-    }
-}
-
-fun formatCost(usd: Double?): String = when {
-    usd == null -> ""
-    usd < 0.01 -> "<$0.01"
-    usd < 10 -> String.format(Locale.US, "$%.2f", usd)
-    else -> String.format(Locale.US, "$%.1f", usd)
-}
-
-fun formatTokens(n: Long?): String = when {
-    n == null -> ""
-    n >= 1_000_000 -> String.format(Locale.US, "%.1fM", n / 1_000_000.0)
-    n >= 10_000 -> "${n / 1000}k"
-    n >= 1000 -> String.format(Locale.US, "%.1fk", n / 1000.0)
-    else -> NumberFormat.getIntegerInstance().format(n)
-}
-
-fun formatPercent(p: Double?): String = if (p == null) "" else "${p.toInt().coerceIn(0, 999)}%"
-
-/** `/home/me/projects/app` → `~/projects/app` style shortening is not possible without $HOME; keep the last 2 segments. */
-fun shortPath(path: String): String {
-    val parts = path.trimEnd('/').split('/').filter { it.isNotEmpty() }
-    return when {
-        parts.isEmpty() -> "/"
-        parts.size <= 2 -> path
-        else -> "…/" + parts.takeLast(2).joinToString("/")
-    }
-}
-
-fun lastSegment(path: String): String = path.trimEnd('/').substringAfterLast('/').ifEmpty { "/" }

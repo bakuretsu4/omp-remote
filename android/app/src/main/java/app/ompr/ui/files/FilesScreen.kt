@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.ompr.ui.theme.Dimens
 import app.ompr.R
 import app.ompr.data.FsEntry
 import app.ompr.data.FsReadResult
@@ -123,7 +124,7 @@ fun FilesScreen(hostId: String, startPath: String, onBack: () -> Unit) {
         Column(Modifier.padding(pad).fillMaxSize()) {
             ConnectionBanner(connState, onRetry = { conn.reconnectNow() })
             when (val l = listing) {
-                Load.Loading -> CenteredProgress()
+                Load.Loading -> CenteredProgress(label = if (connected) "Loading folder\u2026" else "Waiting for connection\u2026")
                 is Load.Failed -> ErrorState(l.message, onRetry = { attempt++ })
                 is Load.Ok -> {
                     val up = canGoUp(dir, info?.roots.orEmpty())
@@ -132,7 +133,7 @@ fun FilesScreen(hostId: String, startPath: String, onBack: () -> Unit) {
                         if (up) item(key = "up") {
                             ListItem(
                                 headlineContent = { Text("..") },
-                                leadingContent = { Icon(Icons.Filled.ArrowUpward, null) },
+                                leadingContent = { Icon(Icons.Filled.ArrowUpward, "Parent folder") },
                                 modifier = Modifier.clickable { stack.add(parentOf(dir)) },
                             )
                         }
@@ -140,12 +141,12 @@ fun FilesScreen(hostId: String, startPath: String, onBack: () -> Unit) {
                             ListItem(
                                 headlineContent = { Text(e.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 supportingContent = e.size?.takeIf { !e.dir }?.let { { Text(formatSize(it)) } },
-                                leadingContent = { Icon(if (e.dir) Icons.Filled.Folder else Icons.AutoMirrored.Filled.InsertDriveFile, null) },
+                                leadingContent = { Icon(if (e.dir) Icons.Filled.Folder else Icons.AutoMirrored.Filled.InsertDriveFile, if (e.dir) "Folder" else "File") },
                                 modifier = Modifier.clickable { if (e.dir) stack.add(e.path) else viewing = e.path },
                             )
                             HorizontalDivider()
                         }
-                        if (l.value.isEmpty()) item(key = "empty") { Text(stringResource(R.string.files_empty), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        if (l.value.isEmpty()) item(key = "empty") { Text(stringResource(R.string.files_empty), Modifier.padding(Dimens.lg), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }
             }
@@ -196,7 +197,7 @@ fun FileViewer(hostId: String, path: String, onClose: () -> Unit) {
         Column(Modifier.padding(pad).fillMaxSize()) {
             ConnectionBanner(connState, onRetry = { conn.reconnectNow() })
             when (val l = load) {
-                Load.Loading -> CenteredProgress()
+                Load.Loading -> CenteredProgress(label = if (connected) "Opening file\u2026" else "Waiting for connection\u2026")
                 is Load.Failed -> ErrorState(l.message, onRetry = { attempt++ })
                 is Load.Ok -> {
                     val r = l.value
@@ -217,7 +218,7 @@ fun FileViewer(hostId: String, path: String, onClose: () -> Unit) {
 @Composable
 internal fun Notice(text: String) {
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
-        Text(text, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+        Text(text, Modifier.padding(horizontal = Dimens.lg, vertical = Dimens.sm), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
     }
 }
 
@@ -228,14 +229,14 @@ private fun CodeView(lines: List<String>) {
     Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
         LazyColumn(Modifier.fillMaxSize()) {
             items(lines.size) { i ->
-                Row(Modifier.padding(horizontal = 8.dp)) {
+                Row(Modifier.padding(horizontal = Dimens.sm)) {
                     Text(
                         (i + 1).toString().padStart(digits),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         softWrap = false,
-                        modifier = Modifier.padding(end = 12.dp),
+                        modifier = Modifier.padding(end = Dimens.md),
                     )
                     Text(clipLine(lines[i]), fontFamily = FontFamily.Monospace, fontSize = 12.sp, softWrap = false)
                 }

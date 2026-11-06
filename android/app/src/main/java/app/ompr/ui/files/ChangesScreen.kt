@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.ompr.ui.theme.Dimens
 import app.ompr.R
 import app.ompr.data.GitStatusFile
 import app.ompr.data.GitStatusResult
@@ -116,7 +117,7 @@ fun ChangesScreen(hostId: String, path: String, onBack: () -> Unit) {
         Column(Modifier.padding(pad).fillMaxSize()) {
             ConnectionBanner(connState, onRetry = { conn.reconnectNow() })
             when (val l = load) {
-                StatusLoad.Loading -> CenteredProgress()
+                StatusLoad.Loading -> CenteredProgress(label = if (connected) "Reading changes\u2026" else "Waiting for connection\u2026")
                 StatusLoad.NotRepo -> EmptyState(stringResource(R.string.changes_not_repo_title), stringResource(R.string.changes_not_repo_body))
                 is StatusLoad.Failed -> ErrorState(l.message, onRetry = { attempt++ })
                 is StatusLoad.Ok -> {
@@ -155,7 +156,7 @@ private fun StatusBadge(code: StatusCode) {
         else -> scheme.surfaceVariant to scheme.onSurfaceVariant
     }
     Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(6.dp)) {
-        Text(code.badge, Modifier.padding(horizontal = 9.dp, vertical = 3.dp), style = MaterialTheme.typography.labelLarge, fontFamily = FontFamily.Monospace)
+        Text(code.badge, Modifier.padding(horizontal = Dimens.sm, vertical = Dimens.xs), style = MaterialTheme.typography.labelLarge, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -209,13 +210,13 @@ private fun FileChange(hostId: String, root: String, file: GitStatusFile, onClos
         Column(Modifier.padding(pad).fillMaxSize()) {
             ConnectionBanner(connState, onRetry = { conn.reconnectNow() })
             if (code.staged && code.unstaged) {
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.padding(horizontal = Dimens.lg, vertical = Dimens.sm), horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
                     FilterChip(selected = !staged, onClick = { staged = false }, label = { Text(stringResource(R.string.changes_unstaged)) })
                     FilterChip(selected = staged, onClick = { staged = true }, label = { Text(stringResource(R.string.changes_staged)) })
                 }
             }
             when (val l = load) {
-                DiffLoad.Loading -> CenteredProgress()
+                DiffLoad.Loading -> CenteredProgress(label = if (connected) "Loading diff\u2026" else "Waiting for connection\u2026")
                 is DiffLoad.Failed -> ErrorState(l.message, onRetry = { attempt++ })
                 is DiffLoad.Ok -> {
                     if (l.truncated) Notice(stringResource(R.string.changes_diff_truncated))
@@ -255,7 +256,7 @@ private fun DiffView(lines: List<DiffLine>) {
                     }
                     Text(
                         clipLine(line.text).ifEmpty { " " },
-                        Modifier.widthIn(min = rowWidth).background(bg).padding(horizontal = 8.dp),
+                        Modifier.widthIn(min = rowWidth).background(bg).padding(horizontal = Dimens.sm),
                         color = fg,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,

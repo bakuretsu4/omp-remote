@@ -1,5 +1,7 @@
 package app.ompr.ui.hosts
 
+import app.ompr.ui.theme.Dimens
+import app.ompr.ui.theme.OmprShapes
 import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
@@ -163,8 +165,8 @@ fun PairScreen(onPaired: (hostId: String) -> Unit, onBack: () -> Unit) {
         },
     ) { pad ->
         Column(
-            Modifier.padding(pad).fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.padding(pad).fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(Dimens.screen),
+            verticalArrangement = Arrangement.spacedBy(Dimens.lg),
         ) {
             val current = ui
             when (current) {
@@ -176,7 +178,7 @@ fun PairScreen(onPaired: (hostId: String) -> Unit, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     if (scanning && cameraGranted) {
-                        Box(Modifier.fillMaxWidth().height(300.dp).clip(RoundedCornerShape(20.dp))) {
+                        Box(Modifier.fillMaxWidth().height(300.dp).clip(OmprShapes.card).semantics { contentDescription = "Camera view for scanning the pairing QR code" }) {
                             QrScanner(onResult = { raw -> offer(raw) }, modifier = Modifier.fillMaxSize())
                         }
                     } else if (scanning) {
@@ -185,7 +187,7 @@ fun PairScreen(onPaired: (hostId: String) -> Unit, onBack: () -> Unit) {
                     } else {
                         OutlinedButton(onClick = { scanning = true }) {
                             Icon(Icons.Filled.QrCodeScanner, null)
-                            Spacer(Modifier.size(8.dp))
+                            Spacer(Modifier.size(Dimens.sm))
                             Text("Scan QR code")
                         }
                     }
@@ -200,14 +202,14 @@ fun PairScreen(onPaired: (hostId: String) -> Unit, onBack: () -> Unit) {
                         maxLines = 5,
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Done),
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Dimens.md)) {
                         OutlinedButton(onClick = {
                             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val clip = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
                             if (!clip.isNullOrBlank()) text = clip
                         }) {
                             Icon(Icons.Filled.ContentPaste, null)
-                            Spacer(Modifier.size(8.dp))
+                            Spacer(Modifier.size(Dimens.sm))
                             Text("Paste")
                         }
                         Button(onClick = { offer(text) }, enabled = text.isNotBlank(), modifier = Modifier.testTag("pair_go")) { Text("Continue") }
@@ -216,8 +218,8 @@ fun PairScreen(onPaired: (hostId: String) -> Unit, onBack: () -> Unit) {
             }
 
             (ui as? PairUi.Failed)?.let {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                    Text(it.message, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
+                Card(shape = OmprShapes.card, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                    Text(it.message, Modifier.padding(Dimens.lg), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
@@ -237,19 +239,19 @@ fun PairScreen(onPaired: (hostId: String) -> Unit, onBack: () -> Unit) {
 private fun ConfirmCard(link: PairingLink, onPair: () -> Unit, onCancel: () -> Unit) {
     val hosts = link.relayHosts
     val anyClear = hosts.any { it.cleartext }
-    Column(Modifier.testTag("pair_confirm"), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.testTag("pair_confirm"), verticalArrangement = Arrangement.spacedBy(Dimens.md)) {
         Text("Pair with “${link.name}”?", style = MaterialTheme.typography.headlineSmall)
         Text(
             "This lets this phone monitor and control coding agents on that PC, including running commands. Only continue if you started this on your own PC just now.",
             style = MaterialTheme.typography.bodyMedium,
         )
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Card(shape = OmprShapes.card, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+            Column(Modifier.padding(Dimens.lg), verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
                 Text("Connects through", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 for (h in hosts) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (h.cleartext) Icons.Filled.LockOpen else Icons.Filled.VerifiedUser, if (h.cleartext) "unencrypted transport" else "TLS", Modifier.size(18.dp))
-                        Spacer(Modifier.size(8.dp))
+                        Spacer(Modifier.size(Dimens.sm))
                         Text(h.host, style = MaterialTheme.typography.bodyLarge, fontFamily = FontFamily.Monospace)
                         if (h.cleartext) Text("  ws:// (no TLS)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
                     }
@@ -262,7 +264,7 @@ private fun ConfirmCard(link: PairingLink, onPair: () -> Unit, onCancel: () -> U
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.md), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(52.dp).testTag("pair_cancel")) { Text("Cancel") }
             Button(onClick = onPair, modifier = Modifier.weight(1f).height(52.dp).testTag("pair_go")) { Text("Pair") }
         }
@@ -272,15 +274,16 @@ private fun ConfirmCard(link: PairingLink, onPair: () -> Unit, onCancel: () -> U
 @Composable
 private fun WorkingCard(w: PairUi.Working, onCancel: () -> Unit) {
     when (val p = w.phase) {
-        PairPhase.Connecting -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        PairPhase.Connecting -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.lg)) {
             CircularProgressIndicator(Modifier.size(32.dp))
             Text("Connecting to ${w.host}…", style = MaterialTheme.typography.titleMedium)
         }
         is PairPhase.WaitingConfirm -> Card(
+            shape = OmprShapes.card,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
             modifier = Modifier.fillMaxWidth().testTag("pair_sas"),
         ) {
-            Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.padding(Dimens.xl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Dimens.md)) {
                 Text("Check this code on your PC", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
                 Text(
                     p.sas,
@@ -292,7 +295,7 @@ private fun WorkingCard(w: PairUi.Working, onCancel: () -> Unit) {
                     "It must match the code the PC shows. If the codes differ, or the PC shows none, tap Cancel — someone else may be using your pairing link.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.md)) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Text("Waiting for confirmation on the PC…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
                 }

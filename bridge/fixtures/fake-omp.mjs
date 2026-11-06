@@ -52,12 +52,119 @@ function respond(id, command, data) {
 
 const assistant = (content, stopReason = "stop") => ({ role: "assistant", content, model: "fake-1", stopReason, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, cost: { total: 0.01 } }, timestamp: Date.now() });
 
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+const DEMO_THINKING = [
+	"The user wants a tour of the transcript.",
+	"I should read the file first, run the build, then try a small edit.",
+	"The edit may fail because the anchor text changed, which is a good case to show.",
+].join("\n");
+
+const DEMO_MARKDOWN = [
+	"## Demo walkthrough",
+	"",
+	"This is a **long markdown** reply with `inline code`, so the app can show its typography, spacing and code blocks.",
+	"",
+	"Things this reply covers:",
+	"",
+	"- a heading and a paragraph with **bold** text",
+	"- a bulleted list like this one",
+	"- tool calls in three different states",
+	"",
+	"Steps I will take:",
+	"",
+	"1. Read the build file",
+	"2. Run the build and show its output",
+	"3. Apply an edit (this one will fail)",
+	"",
+	"A small Kotlin snippet:",
+	"",
+	"```kotlin",
+	"fun greet(name: String): String {",
+	"    val shout = name.uppercase()",
+	"    return \"Hello, $shout!\"",
+	"}",
+	"```",
+	"",
+	"| Tool | Result | Time |",
+	"| --- | --- | --- |",
+	"| read | ok | 12 ms |",
+	"| bash | ok | 1.4 s |",
+	"| edit | failed | 3 ms |",
+	"",
+	"Starting now.",
+].join("\n");
+
+const DEMO_BUILD_OUTPUT = [
+	"> Task :app:compileKotlin",
+	"> Task :app:compileJava NO-SOURCE",
+	"> Task :app:processResources",
+	"> Task :app:classes",
+	"> Task :app:jar",
+	"",
+	"BUILD SUCCESSFUL in 4s",
+	"5 actionable tasks: 5 executed",
+].join("\n");
+
+/** One tool execution: start, optional update, end, then the toolResult message (the shape the approve path emits). */
+async function demoTool(id, name, args, intent, text, isError = false) {
+	out({ type: "tool_execution_start", toolCallId: id, toolName: name, args, intent });
+	await sleep(300);
+	out({ type: "tool_execution_update", toolCallId: id, toolName: name, args, partialResult: { content: [{ type: "text", text: text.split("\n")[0] }] } });
+	await sleep(300);
+	out({ type: "tool_execution_end", toolCallId: id, toolName: name, result: { content: [{ type: "text", text }] }, isError });
+	const tr = { role: "toolResult", toolCallId: id, toolName: name, content: [{ type: "text", text }], isError, timestamp: Date.now() };
+	out({ type: "message_start", message: tr, messageId: `msg-${++n}` });
+	out({ type: "message_end", message: tr, messageId: `msg-${n}` });
+}
+
+/** The `demo` prompt: thinking, long markdown, tool calls that succeed and fail, then a final text. Needs no approval. */
+async function demoTurn(user) {
+	const calls = [
+		{ type: "toolCall", id: "demo_read", name: "read", arguments: { path: "build.gradle.kts" }, intent: "Reading the build file" },
+		{ type: "toolCall", id: "demo_bash", name: "bash", arguments: { command: "./gradlew assemble" }, intent: "Running the build" },
+		{ type: "toolCall", id: "demo_edit", name: "edit", arguments: { path: "src/Main.kt", oldText: "fun main()", newText: "suspend fun main()" }, intent: "Making main suspend" },
+	];
+	const mid = `msg-${++n}`;
+	const thinking = { type: "thinking", thinking: "" };
+	out({ type: "message_start", message: assistant([thinking]), messageId: mid });
+	const thoughtLines = DEMO_THINKING.split("\n");
+	for (let i = 1; i <= thoughtLines.length; i++) {
+		const partial = { type: "thinking", thinking: thoughtLines.slice(0, i).join("\n") };
+		out({ type: "message_update", message: assistant([partial]), messageId: mid, assistantMessageEvent: { type: "thinking_delta", contentIndex: 0, delta: thoughtLines[i - 1] } });
+		await sleep(60);
+	}
+	const think = { type: "thinking", thinking: DEMO_THINKING };
+	const mdLines = DEMO_MARKDOWN.split("\n");
+	for (let i = 1; i <= mdLines.length; i++) {
+		const partial = { type: "text", text: mdLines.slice(0, i).join("\n") };
+		out({ type: "message_update", message: assistant([think, partial]), messageId: mid, assistantMessageEvent: { type: "text_delta", contentIndex: 1, delta: `${mdLines[i - 1]}\n` } });
+		await sleep(25);
+	}
+	const a1 = assistant([think, { type: "text", text: DEMO_MARKDOWN }, ...calls], "toolUse");
+	out({ type: "message_end", message: a1, messageId: mid });
+
+	await demoTool("demo_read", "read", calls[0].arguments, calls[0].intent, "plugins {\n    kotlin(\"jvm\") version \"2.0.21\"\n}\n\nrepositories {\n    mavenCentral()\n}");
+	await demoTool("demo_bash", "bash", calls[1].arguments, calls[1].intent, DEMO_BUILD_OUTPUT);
+	await demoTool("demo_edit", "edit", calls[2].arguments, calls[2].intent, "Error: could not find the text to replace in src/Main.kt.\nThe file has changed since it was read; read it again and retry.", true);
+
+	const a2 = assistant([{ type: "text", text: "The read and the build worked. The edit failed because the file no longer contains `fun main()`; that is the end of this demo." }]);
+	const fid = `msg-${++n}`;
+	out({ type: "message_start", message: assistant([{ type: "text", text: "" }]), messageId: fid });
+	out({ type: "message_end", message: a2, messageId: fid });
+	state.isStreaming = false;
+	out({ type: "agent_end", messages: [user, a1, a2], isTerminal: true, yielded: true });
+	out({ type: "prompt_result", agentInvoked: true, status: "completed", sessionSettled: true });
+	out({ type: "session_settled" });
+}
+
 async function runTurn(message) {
 	state.isStreaming = true;
 	out({ type: "agent_start" });
 	const user = { role: "user", content: [{ type: "text", text: message }], timestamp: Date.now() };
 	out({ type: "message_start", message: user, messageId: `msg-${++n}` });
 	out({ type: "message_end", message: user, messageId: `msg-${n}` });
+	if (message.includes("demo")) return demoTurn(user);
 	if (message.includes("approve")) {
 		const call = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "echo hi" } };
 		const a1 = assistant([call], "toolUse");

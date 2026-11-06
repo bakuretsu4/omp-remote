@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import app.ompr.ui.theme.Dimens
 import app.ompr.service.UnifiedPushController
 import app.ompr.ui.common.LocalGraph
 import kotlinx.coroutines.launch
@@ -51,11 +52,11 @@ fun UnifiedPushSection() {
     var choices by remember { mutableStateOf<List<UnifiedPushController.Distributor>?>(null) }
     var noneInstalled by remember { mutableStateOf(false) }
 
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text("Wake-ups without Google (UnifiedPush)", style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(4.dp))
+    Column(Modifier.padding(horizontal = Dimens.lg, vertical = Dimens.md)) {
+        Text("Wake-ups without Google (UnifiedPush)", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(Dimens.xs))
         Text(unifiedPushStatus(on, endpoint, error), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Dimens.md))
         if (on) {
             OutlinedButton(onClick = { scope.launch { graph.unifiedPush.disable() } }) { Text("Turn off") }
         } else {

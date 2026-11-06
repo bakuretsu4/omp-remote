@@ -54,39 +54,103 @@ import app.ompr.ui.common.formatCost
 import app.ompr.ui.common.formatPercent
 import app.ompr.ui.common.formatTokens
 import java.util.Locale
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.DataUsage
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import app.ompr.ui.newsession.approvalLabel
+import app.ompr.ui.theme.Dimens
+import app.ompr.ui.theme.OmprShapes
 
-/** model · thinking · context % · cost · tokens/s */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * model · thinking · approvals · context % · cost · tokens/s as compact chips in one scrolling line. Tapping a chip
+ * calls [onOpen] (the session settings sheet, where the model, thinking level and approval mode are changed).
+ */
 @Composable
-fun StatusBar(view: SessionView) {
+fun StatusBar(view: SessionView, onOpen: (() -> Unit)? = null) {
     val st = view.state
     val sum = view.summary
     val model = st.model ?: sum?.model
-    val thinking = st.thinkingLevel ?: sum?.thinkingLevel
+    val thinking = (st.thinkingLevel ?: sum?.thinkingLevel)?.takeIf { it.isNotEmpty() && it != "off" }
+    val approval = st.approvalMode ?: sum?.approvalMode
     val ctx = st.contextUsage?.percent ?: sum?.contextPercent
-    val cost = st.costUsd ?: sum?.costUsd
-    val tps = st.tokensPerSecond
-    val parts = buildList {
-        model?.let { add(it.label) }
-        if (!thinking.isNullOrEmpty() && thinking != "off") add("think $thinking")
-        if (st.fastMode == true) add("fast")
-        ctx?.let { add("ctx ${formatPercent(it)}") }
-        if (cost != null && cost > 0) add(formatCost(cost))
-        if (tps != null && tps > 0 && view.busy) add(String.format(Locale.US, "%.0f tok/s", tps))
-        st.contextUsage?.tokens?.let { if (it > 0) add("${formatTokens(it)} tok") }
-    }
-    if (parts.isEmpty()) return
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), modifier = Modifier.fillMaxWidth()) {
-        Column {
-            FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).semantics { contentDescription = "Session status: " + parts.joinToString(", ") }, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                for (p in parts) Text(p, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val cost = (st.costUsd ?: sum?.costUsd)?.takeIf { it > 0 }
+    val tps = st.tokensPerSecond?.takeIf { it > 0 && view.busy }
+    val tokens = st.contextUsage?.tokens?.takeIf { it > 0 }
+    val fast = st.fastMode == true
+    if (model == null && thinking == null && approval == null && ctx == null && cost == null && tps == null && tokens == null && !fast) return
+    val scheme = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Dimens.lg, vertical = Dimens.xs),
+            horizontalArrangement = Arrangement.spacedBy(Dimens.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            model?.let { InfoChip(it.label, Icons.Filled.AutoAwesome, "Model ${it.label}", onOpen) }
+            thinking?.let { InfoChip("Think $it", Icons.Filled.Psychology, "Thinking level $it", onOpen) }
+            if (fast) InfoChip("Fast", Icons.Filled.Bolt, "Fast mode on", onOpen)
+            approval?.let { InfoChip(approvalLabel(it), Icons.Filled.Security, "Approval mode ${approvalLabel(it)}", onOpen) }
+            ctx?.let {
+                val (bg, fg) = when {
+                    it >= 85 -> scheme.errorContainer to scheme.onErrorContainer
+                    it >= 70 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+                    else -> scheme.surfaceContainerHigh to scheme.onSurface
+                }
+                InfoChip("Context ${formatPercent(it)}", Icons.Filled.DataUsage, "Context ${formatPercent(it)} used", onOpen, bg, fg)
             }
-            if (ctx != null && ctx >= 70) {
-                LinearProgressIndicator(
-                    progress = { (ctx / 100.0).toFloat().coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = if (ctx >= 85) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                )
+            cost?.let { InfoChip(formatCost(it), null, "Cost ${formatCost(it)}", onOpen) }
+            tps?.let { InfoChip(String.format(Locale.US, "%.0f tok/s", it), Icons.Filled.Speed, "${it.toInt()} tokens per second", null) }
+            tokens?.let { InfoChip("${formatTokens(it)} tok", null, "${formatTokens(it)} tokens in context", null) }
+        }
+        if (ctx != null && ctx >= 70) {
+            LinearProgressIndicator(
+                progress = { (ctx / 100.0).toFloat().coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
+                color = if (ctx >= 85) scheme.error else scheme.primary,
+            )
+        }
+    }
+}
+
+/** A small pill on a surface container; a tappable chip when [onClick] is set, otherwise a plain label. */
+@Composable
+private fun InfoChip(
+    label: String,
+    icon: ImageVector?,
+    description: String,
+    onClick: (() -> Unit)?,
+    container: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    content: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    if (onClick != null) {
+        AssistChip(
+            onClick = onClick,
+            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            leadingIcon = icon?.let { i -> { Icon(i, null, Modifier.size(AssistChipDefaults.IconSize)) } },
+            shape = OmprShapes.chip,
+            colors = AssistChipDefaults.assistChipColors(containerColor = container, labelColor = content, leadingIconContentColor = content),
+            border = null,
+            modifier = Modifier.widthIn(max = 240.dp).semantics { contentDescription = "$description. Opens session settings" },
+        )
+    } else {
+        Surface(color = container, contentColor = content, shape = OmprShapes.chip, modifier = Modifier.semantics { contentDescription = description }) {
+            Row(
+                Modifier.heightIn(min = 32.dp).padding(horizontal = Dimens.md),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs),
+            ) {
+                if (icon != null) Icon(icon, null, Modifier.size(AssistChipDefaults.IconSize))
+                Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
             }
         }
     }
@@ -103,10 +167,10 @@ fun TodoGoalPanel(view: SessionView) {
     val done = tasks.count { it.status == "completed" }
     val current = tasks.firstOrNull { it.status == "in_progress" }
     Surface(color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.padding(horizontal = Dimens.lg, vertical = Dimens.sm)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = Dimens.touch).clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Flag, null, Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
+                Spacer(Modifier.size(Dimens.sm))
                 Column(Modifier.weight(1f)) {
                     Text(
                         goal?.objective ?: current?.content ?: "Tasks",
@@ -117,7 +181,7 @@ fun TodoGoalPanel(view: SessionView) {
                 Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, if (open) "Hide tasks" else "Show tasks")
             }
             AnimatedVisibility(open) {
-                Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.padding(top = Dimens.sm), verticalArrangement = Arrangement.spacedBy(Dimens.sm - Dimens.xxs)) {
                     if (goal != null) {
                         Text("Goal (${goal.status}): ${goal.objective}", style = MaterialTheme.typography.bodyMedium)
                         if (goal.tokenBudget != null) {
@@ -137,7 +201,7 @@ fun TodoGoalPanel(view: SessionView) {
                                     else -> Icons.Filled.RadioButtonUnchecked to "pending"
                                 }
                                 Icon(icon, desc, Modifier.size(18.dp), tint = if (t.status == "completed") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.size(8.dp))
+                                Spacer(Modifier.size(Dimens.sm))
                                 Column {
                                     Text(t.content, style = MaterialTheme.typography.bodySmall)
                                     if (!t.blocker.isNullOrBlank()) Text("Blocked: ${t.blocker}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
@@ -161,15 +225,15 @@ fun SubagentPanel(view: SessionView, onCancel: (SubagentInfo) -> Unit, onSteer: 
     val active = subs.count { it.status == "running" || it.status == "pending" }
     val canAct = view.can(Cap.SUBAGENTS)
     Surface(color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.padding(horizontal = Dimens.lg, vertical = Dimens.sm)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = Dimens.touch).clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.SmartToy, null, Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
+                Spacer(Modifier.size(Dimens.sm))
                 Text("Subagents · $active running of ${subs.size}", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                 Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, if (open) "Hide subagents" else "Show subagents")
             }
             AnimatedVisibility(open) {
-                Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(top = Dimens.sm - Dimens.xxs), verticalArrangement = Arrangement.spacedBy(Dimens.sm)) {
                     for (s in subs) {
                         val live = s.status == "running" || s.status == "pending" || s.status == "idle"
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -206,7 +270,7 @@ fun QueueChips(view: SessionView, onRemove: (String, String) -> Unit, onPromote:
     val q = view.queue
     if (q.steering.isEmpty() && q.followUp.isEmpty()) return
     val canQueue = view.can(Cap.QUEUE)
-    LazyRow(Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyRow(Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Dimens.md, vertical = Dimens.xs), horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
         items(q.steering.map { "steering" to it } + q.followUp.map { "followUp" to it }) { (kind, msg) ->
             InputChip(
                 selected = false,

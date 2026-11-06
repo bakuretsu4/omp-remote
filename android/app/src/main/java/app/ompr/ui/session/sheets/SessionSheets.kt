@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
+import app.ompr.ui.theme.Dimens
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -108,13 +109,13 @@ fun SessionSettingsSheet(view: SessionView, handle: SessionHandle, actions: Sess
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
         Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.xl).padding(bottom = Dimens.xl),
+            verticalArrangement = Arrangement.spacedBy(Dimens.lg),
         ) {
             Text("Session", style = MaterialTheme.typography.titleLarge)
 
             if (view.can(Cap.MODEL)) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
                     Text("Model", style = MaterialTheme.typography.labelLarge)
                     OutlinedButton(onClick = { modelMenu = true }, enabled = !busy && models.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
                         Text(model?.label ?: "Default", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -124,9 +125,9 @@ fun SessionSettingsSheet(view: SessionView, handle: SessionHandle, actions: Sess
 
             if (view.can(Cap.THINKING)) {
                 val levels = models.firstOrNull { it.id == model?.id && it.provider == model.provider }?.thinkingLevels ?: ThinkingLevels.all
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
                     Text("Thinking", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
                         for (l in levels) FilterChip(selected = thinking == l, enabled = !busy, onClick = { run { handle.setThinking(l) } }, label = { Text(l) })
                     }
                 }
@@ -146,9 +147,9 @@ fun SessionSettingsSheet(view: SessionView, handle: SessionHandle, actions: Sess
             }
 
             if (view.can(Cap.APPROVAL_MODE)) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
                     Text("Approvals", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
                         for (m in ApprovalModes.allowedBy(hostInfo)) FilterChip(selected = approval == m, enabled = !busy, onClick = {
                             run {
                                 if (ApprovalModes.isWeaker(approval, m) && !graph.gate.guard(activity, "Allow ${approvalLabel(m)}")) {
@@ -164,7 +165,7 @@ fun SessionSettingsSheet(view: SessionView, handle: SessionHandle, actions: Sess
             }
 
             if (view.can(Cap.GOAL)) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
                     Text("Goal", style = MaterialTheme.typography.labelLarge)
                     val g = view.goal
                     if (g == null) {
@@ -172,7 +173,7 @@ fun SessionSettingsSheet(view: SessionView, handle: SessionHandle, actions: Sess
                     } else {
                         Text(g.objective, style = MaterialTheme.typography.bodyMedium)
                         Text("Status: ${g.status}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
                             if (g.status.contains("pause", true)) OutlinedButton(onClick = { run { handle.goal("resume") } }, enabled = !busy) { Text("Resume") }
                             else OutlinedButton(onClick = { run { handle.goal("pause") } }, enabled = !busy) { Text("Pause") }
                             OutlinedButton(onClick = { run { handle.goal("drop") } }, enabled = !busy) { Text("Drop") }

@@ -1,18 +1,17 @@
 package app.ompr.ui.hosts
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
@@ -27,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -39,26 +39,41 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.ompr.data.HostRecord
+import app.ompr.data.SessionKind
+import app.ompr.ui.common.ConnectionDot
 import app.ompr.ui.common.EmptyState
 import app.ompr.ui.common.LocalGraph
 import app.ompr.ui.common.timeAgo
+import app.ompr.ui.home.LinkState
+import app.ompr.ui.home.LiveHost
+import app.ompr.ui.home.rememberLiveHosts
+import app.ompr.ui.theme.Dimens
+import app.ompr.ui.theme.OmprShapes
+import app.ompr.ui.theme.pcColors
 import kotlinx.coroutines.launch
 
+/** The paired PCs with live state. [onBack] is null when this is the first screen (nothing paired yet). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HostsScreen(onOpen: (String) -> Unit, onPair: () -> Unit, onSettings: () -> Unit) {
+fun HostsScreen(onOpen: (String) -> Unit, onPair: () -> Unit, onSettings: () -> Unit, onBack: (() -> Unit)? = null) {
     val graph = LocalGraph.current
     val hosts by graph.hosts.hosts.collectAsState()
+    val live = rememberLiveHosts(hosts)
     var removing by remember { mutableStateOf<HostRecord?>(null) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("OMP Remote") },
-                actions = { IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Settings") } },
+                navigationIcon = {
+                    if (onBack != null) IconButton(onClick = onBack, modifier = Modifier.size(Dimens.touch)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                },
+                title = { Text(if (hosts.isEmpty()) "OMP Remote" else "PCs") },
+                actions = { IconButton(onClick = onSettings, modifier = Modifier.size(Dimens.touch)) { Icon(Icons.Filled.Settings, "Settings") } },
             )
         },
         floatingActionButton = {
@@ -75,26 +90,10 @@ fun HostsScreen(onOpen: (String) -> Unit, onPair: () -> Unit, onSettings: () -> 
         } else {
             LazyColumn(
                 Modifier.padding(pad).fillMaxSize(),
-                contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(Dimens.screen, Dimens.xs, Dimens.screen, Dimens.fabClearance),
+                verticalArrangement = Arrangement.spacedBy(Dimens.md),
             ) {
-                items(hosts, key = { it.hostId }) { h ->
-                    Card(Modifier.fillMaxWidth().clickable { onOpen(h.hostId) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Computer, null, Modifier.size(32.dp))
-                            Spacer(Modifier.size(16.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(h.name, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "Paired ${timeAgo(h.pairedAt)} · ${h.relays.size} relay${if (h.relays.size == 1) "" else "s"}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            IconButton(onClick = { removing = h }) { Icon(Icons.Filled.Delete, "Remove ${h.name}") }
-                        }
-                    }
-                }
+                items(live, key = { it.host.hostId }) { l -> HostCard(l, onOpen = { onOpen(l.host.hostId) }, onRemove = { removing = l.host }) }
             }
         }
     }
@@ -111,9 +110,57 @@ fun HostsScreen(onOpen: (String) -> Unit, onPair: () -> Unit, onSettings: () -> 
                         graph.hosts.remove(h.hostId)
                         graph.connections.forget(h.hostId)
                     }
-                }) { Text("Remove") }
+                }, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Remove") }
             },
             dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun HostCard(l: LiveHost, onOpen: () -> Unit, onRemove: () -> Unit) {
+    val graph = LocalGraph.current
+    val h = l.host
+    val input = l.input
+    val colors = pcColors(input.colorIndex)
+    val lastConnected by graph.settings.lastConnected(h.hostId).collectAsState(initial = 0L)
+    val link = input.link
+    val stateText = when (link) {
+        LinkState.CONNECTED -> "Connected"
+        LinkState.CONNECTING -> "Connecting…"
+        LinkState.UNREACHABLE -> "Unreachable"
+    }
+    val open = input.sessions.items.count { it.kind != SessionKind.RECENT }
+    val detail = buildList {
+        if (input.sessions.loaded && link != LinkState.UNREACHABLE) add(if (open == 1) "1 open session" else "$open open sessions")
+        if (link != LinkState.CONNECTED) {
+            add(if (lastConnected > 0) "last connected ${timeAgo(lastConnected)}" else "never connected")
+        }
+    }.joinToString(" · ")
+    Card(
+        onClick = onOpen,
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "${h.name}, ${stateText.trimEnd('…')}" },
+        shape = OmprShapes.card,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Row(Modifier.padding(start = Dimens.lg, top = Dimens.md, bottom = Dimens.md, end = Dimens.xs), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = colors.container, contentColor = colors.onContainer, shape = OmprShapes.chip, modifier = Modifier.size(44.dp)) {
+                Icon(Icons.Filled.Computer, null, Modifier.padding(11.dp))
+            }
+            Column(Modifier.weight(1f).padding(horizontal = Dimens.lg), verticalArrangement = Arrangement.spacedBy(Dimens.xxs)) {
+                Text(h.name, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.sm - 2.dp)) {
+                    ConnectionDot(connected = link == LinkState.CONNECTED, connecting = link == LinkState.CONNECTING)
+                    Text(stateText, style = MaterialTheme.typography.labelLarge)
+                }
+                if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Paired ${timeAgo(h.pairedAt)} · ${h.relays.size} relay${if (h.relays.size == 1) "" else "s"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onRemove, modifier = Modifier.size(Dimens.touch)) { Icon(Icons.Filled.Delete, "Remove ${h.name}") }
+        }
     }
 }

@@ -34,6 +34,7 @@ import app.ompr.net.HandoverStep
 import app.ompr.net.PcHandover
 import app.ompr.ui.common.LocalGraph
 import app.ompr.ui.common.rememberHostConnection
+import app.ompr.ui.theme.Dimens
 import app.ompr.ui.common.userMessage
 import kotlinx.coroutines.launch
 
@@ -93,7 +94,7 @@ fun ContinueOnOtherPc(view: SessionView, hostId: String, sid: String, actions: S
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
         for (h in others) {
             OutlinedButton(onClick = { ui = ContinueUi.Confirm(h) }, enabled = blocker == null && ui is ContinueUi.Idle, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.continue_on, h.name))
@@ -118,7 +119,7 @@ fun ContinueOnOtherPc(view: SessionView, hostId: String, sid: String, actions: S
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.size(12.dp))
+                    Spacer(Modifier.size(Dimens.md))
                     Text(stepLabel(s.step))
                 }
             },
@@ -128,7 +129,7 @@ fun ContinueOnOtherPc(view: SessionView, hostId: String, sid: String, actions: S
             onDismissRequest = { ui = ContinueUi.Idle },
             title = { Text(stringResource(R.string.continue_failed_title, s.dest.name)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.sm)) {
                     Text(stringResource(R.string.continue_failed_at, stepNoun(s.step)), style = MaterialTheme.typography.labelLarge)
                     Text(s.message)
                     if (s.step > HandoverStep.STOPPING) Text(stringResource(R.string.continue_failed_stopped, sourceName), style = MaterialTheme.typography.bodySmall)

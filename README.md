@@ -1,6 +1,6 @@
 # OMP Remote
 
-Monitor and drive your [omp](https://github.com/can1357/oh-my-pi) coding-agent sessions from your phone: see which sessions are working,
+Monitor and drive your [omp](https://github.com/can1357/oh-my-pi) coding-agent sessions from your phone, across all your PCs: see which sessions are working,
 waiting for you, or done; approve tool prompts and answer `ask` dialogs; chat, steer and interrupt; start new sessions on your PC while
 you are away; attach images and files. No VPN: the phone and the PC both connect **out** to a small relay, and everything between them
 is end-to-end encrypted.
@@ -52,7 +52,7 @@ Verified on real hardware (Pixel 7) and an emulator, against real omp:
 - attaching to a live TUI session and prompting it from the phone;
 - the Cloudflare Worker, deployed and contract-tested over real TLS.
 
-Tests: bridge 212, relay 24, Android 51, plus shared crypto vectors that every client must reproduce.
+Tests: bridge 292, relay 24, Android 138, plus shared crypto vectors that every client must reproduce. CI runs all of them on every push.
 
 **Peer sync** (`peer` in the bridge config, `ompr sync`) mirrors sessions, image blobs and project folders to an always-on second PC over SSH + rsync, so a session can be continued from the phone while the main PC is off.
 The planner and the project-folder guard are unit-tested. A live run against a second machine pushed 74 real sessions (254 transcripts, 10,118 blobs, identical counts on both sides) and the next run was incremental.
@@ -66,8 +66,16 @@ notification, read a real location fix, wrote and read back the clipboard, and r
 opens the confirmation. The bridge half is also covered by a live script (`bridge/e2e/live-hosttools.ts`). Testing on the device found and fixed three bugs (the connection died while the system
 camera was open; no notification was posted if the app left the screen while a confirmation was pending; a "Recent" session that a live terminal still held could be opened a second time).
 
-**Not done / not verified:** push notifications (FCM code exists but is untested without a Firebase project), voice (`live.*`), the biometric lock on
-real hardware, wake-on-LAN (the PC must be awake), and anything iOS.
+**New in 0.2.0** (unit-tested, and run in the minified release build on an emulator against two demo PCs; **not yet run on a physical phone**):
+
+- **One home for every PC:** sessions from all paired PCs in a single list, with a "Needs you" section first, PC filter chips, a colour tag per PC, and status on each card. Material You colours (switch in Settings).
+- **Continue on another PC** (session menu): stop, sync, open on the other PC. Needs `peer` configured on one of the two bridges.
+- **Wake-ups without Google (UnifiedPush / ntfy):** the bridge sends a content-free wake, the app wakes and reads the attention list. A real wake to ntfy.sh was accepted by the bridge side; the phone side has not been tried with ntfy installed.
+- **Account usage** (`omp usage`), **Files** and **Changes** (git status and diff) per session, with hardened git execution: hostile repo config cannot run programs.
+- **Backups:** `backup` in the bridge config keeps daily hard-linked snapshots of omp's sessions in a folder you choose (`ompr backup`).
+- Terminal `omp` sessions can attach to the bridge automatically (`collab.autoStart: control` in omp's config, with `collab.relayUrl` pointing at the bridge's local relay).
+
+**Not done / not verified:** FCM push (code exists, untested without a Firebase project), voice (`live.*`), the biometric lock on real hardware, wake-on-LAN (the PC must be awake), the unreachable-PC banner on a real outage (unit-tested only), a real wallpaper-derived colour palette, and anything iOS.
 
 ## License and credits
 

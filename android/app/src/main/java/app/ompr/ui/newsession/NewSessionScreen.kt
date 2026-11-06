@@ -1,5 +1,15 @@
 package app.ompr.ui.newsession
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import app.ompr.ui.common.PcTag
+import app.ompr.ui.common.rememberHostColorIndex
+import app.ompr.ui.common.rememberHostName
+import app.ompr.ui.theme.Dimens
+import app.ompr.ui.theme.OmprShapes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,6 +99,65 @@ private sealed interface Browse {
     data class Err(val message: String) : Browse
 }
 
+private val STEP_LABELS = listOf("Folder", "Options")
+
+/** "Step 2 of 2 — Options" with a progress bar, so the user always knows how far along the wizard is. */
+@Composable
+private fun StepHeader(step: Int, labels: List<String>) {
+    val total = labels.size
+    val index = step.coerceIn(0, total - 1)
+    Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.lg, vertical = Dimens.sm)) {
+        Text(
+            "Step ${index + 1} of $total \u2014 ${labels[index]}",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.size(Dimens.xs + Dimens.xxs))
+        LinearProgressIndicator(
+            progress = { (index + 1).toFloat() / total },
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Step ${index + 1} of $total" },
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        )
+    }
+}
+
+/** What "Start session" will create, in one card. */
+@Composable
+private fun SessionSummary(
+    hostId: String,
+    folder: String,
+    model: String,
+    thinking: String,
+    approval: String,
+    prompt: String,
+    attachmentCount: Int,
+    goal: String,
+    hostTools: Boolean,
+) {
+    Surface(shape = OmprShapes.card, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(Dimens.card), verticalArrangement = Arrangement.spacedBy(Dimens.sm)) {
+            Text("Ready to start", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            SummaryRow("PC") { PcTag(rememberHostName(hostId), rememberHostColorIndex(hostId)) }
+            SummaryRow("Folder") { Text(folder.ifEmpty { "\u2014" }, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            SummaryRow("Model") { Text(model, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            SummaryRow("Thinking") { Text(thinking, style = MaterialTheme.typography.bodyMedium) }
+            SummaryRow("Approvals") { Text(approval, style = MaterialTheme.typography.bodyMedium) }
+            SummaryRow("Phone tools") { Text(if (hostTools) "Agent may use my phone" else "Off", style = MaterialTheme.typography.bodyMedium) }
+            if (prompt.isNotEmpty()) SummaryRow("First message") { Text(prompt, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis) }
+            if (attachmentCount > 0) SummaryRow("Images") { Text("$attachmentCount attached", style = MaterialTheme.typography.bodyMedium) }
+            if (goal.isNotEmpty()) SummaryRow("Goal") { Text(goal, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis) }
+        }
+    }
+}
+
+@Composable
+private fun SummaryRow(label: String, value: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.width(96.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(Modifier.weight(1f)) { value() }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> Unit) {
@@ -170,7 +239,7 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
             if (step == 0) {
                 Column {
                     HorizontalDivider()
-                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(Dimens.md), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Selected", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(cwd ?: "—", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -181,8 +250,8 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
             } else {
                 Column {
                     HorizontalDivider()
-                    Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                        if (creating) CircularProgressIndicator(Modifier.size(24.dp).padding(end = 8.dp), strokeWidth = 2.dp)
+                    Row(Modifier.fillMaxWidth().padding(Dimens.md), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                        if (creating) CircularProgressIndicator(Modifier.size(24.dp).padding(end = Dimens.sm), strokeWidth = 2.dp)
                         Button(
                             enabled = !creating && !attachments.items.collectAsState().value.any { it.state is app.ompr.ui.common.AttachState.Uploading },
                             onClick = {
@@ -222,6 +291,7 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             ConnectionBanner(state, onRetry = { conn.reconnectNow(); reload++ })
+            StepHeader(step = step, labels = STEP_LABELS)
             if (step == 0) {
                 when (val b = browse) {
                     Browse.Loading -> CenteredProgress()
@@ -233,12 +303,12 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
                 }
             } else {
                 Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Dimens.lg),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.lg),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Folder, null)
-                        Spacer(Modifier.size(8.dp))
+                        Spacer(Modifier.size(Dimens.sm))
                         Column(Modifier.weight(1f)) {
                             Text(lastSegment(cwd.orEmpty()), style = MaterialTheme.typography.titleMedium)
                             Text(cwd.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -249,15 +319,15 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
                     ModelPicker(models, modelsError, model, onPick = { model = it; if (thinking != null && it.thinkingLevels?.contains(thinking) == false) thinking = null })
 
                     val levels = model?.thinkingLevels ?: ThinkingLevels.all
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
                         Text("Thinking", style = MaterialTheme.typography.labelLarge)
-                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
                             FilterChip(selected = thinking == null, onClick = { thinking = null }, label = { Text("Default") })
                             for (l in levels) FilterChip(selected = thinking == l, onClick = { thinking = l }, label = { Text(l) })
                         }
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs + Dimens.xxs)) {
                         Text("Approvals", style = MaterialTheme.typography.labelLarge)
                         for (m in allowedModes) {
                             Row(
@@ -265,7 +335,7 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 RadioButton(selected = approvalMode == m, onClick = null)
-                                Spacer(Modifier.size(12.dp))
+                                Spacer(Modifier.size(Dimens.md))
                                 Column {
                                     Text(approvalLabel(m), style = MaterialTheme.typography.bodyLarge)
                                     Text(approvalHint(m), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -285,7 +355,7 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
                     Box {
                         OutlinedButton(onClick = { attachMenu = true }) {
                             Icon(Icons.Filled.AddPhotoAlternate, null)
-                            Spacer(Modifier.size(8.dp))
+                            Spacer(Modifier.size(Dimens.sm))
                             Text("Attach image")
                         }
                         AttachmentMenu(launchers, attachMenu, { attachMenu = false }, allowFiles = false)
@@ -309,6 +379,18 @@ fun NewSessionScreen(hostId: String, onBack: () -> Unit, onCreated: (String) -> 
                         }
                         Switch(checked = hostTools, onCheckedChange = null)
                     }
+
+                    SessionSummary(
+                        hostId = hostId,
+                        folder = cwd.orEmpty(),
+                        model = model?.let { "${it.label} · ${it.provider}" } ?: "Default model",
+                        thinking = thinking ?: "Default",
+                        approval = approvalLabel(approvalMode),
+                        prompt = prompt.trim(),
+                        attachmentCount = attachments.items.collectAsState().value.size,
+                        goal = goal.trim(),
+                        hostTools = hostTools,
+                    )
                 }
             }
         }

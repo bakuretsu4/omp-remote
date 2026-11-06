@@ -1,5 +1,7 @@
 package app.ompr.ui.usage
 
+import app.ompr.ui.theme.Dimens
+import app.ompr.ui.theme.OmprShapes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -121,12 +123,12 @@ private fun UsageList(result: UsageResult, now: Long) {
     val groups = groupByProvider(result.accounts)
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(Dimens.screen, Dimens.sm, Dimens.screen, Dimens.xl),
+        verticalArrangement = Arrangement.spacedBy(Dimens.cardGap),
     ) {
         for (g in groups) {
             item(key = "h-${g.provider}") {
-                Text(g.label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+                Text(g.label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = Dimens.sm))
             }
             items(g.accounts.size, key = { "a-${g.provider}-$it" }) { i -> AccountCard(g.accounts[i], now) }
         }
@@ -135,7 +137,7 @@ private fun UsageList(result: UsageResult, now: Long) {
                 stringResource(R.string.usage_updated, timeAgo(result.generatedAt, now).ifEmpty { "—" }),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = Dimens.xs),
             )
         }
     }
@@ -143,8 +145,8 @@ private fun UsageList(result: UsageResult, now: Long) {
 
 @Composable
 private fun AccountCard(a: UsageAccount, now: Long) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Card(Modifier.fillMaxWidth(), shape = OmprShapes.card, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+        Column(Modifier.padding(Dimens.card), verticalArrangement = Arrangement.spacedBy(Dimens.md)) {
             Column {
                 Text(accountTitle(a), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 accountSubtitle(a)?.let {
@@ -171,7 +173,7 @@ private fun severityColor(s: LimitSeverity): Color = when (s) {
 private fun LimitRow(l: UsageLimit, now: Long) {
     val sev = l.severity
     val color = severityColor(sev)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(l.label.ifBlank { l.id }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(usedText(l.usedFraction), style = MaterialTheme.typography.bodyMedium, color = color)
@@ -181,7 +183,7 @@ private fun LimitRow(l: UsageLimit, now: Long) {
                 progress = { barProgress(l.usedFraction) },
                 modifier = Modifier.fillMaxWidth(),
                 color = color,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

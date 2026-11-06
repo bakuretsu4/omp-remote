@@ -64,7 +64,29 @@ uninstall the debug app first. That deletes its stored PC keys, so pair each PC 
 | `service/` | foreground `ConnectionService` ("Keep connected"), notifications, FCM `PushService` |
 | `security/` | optional biometric gate (app open + approvals) |
 | `tools/` | phone-as-agent-tools: `PhoneToolHandler` (policy, consent, budgets), `DeviceTools` (location, clipboard, notification, camera), `ToolRuntime` (confirmation requests + the on-screen activity) |
-| `ui/` | Compose screens: hosts/pairing, dashboard, session, new-session wizard, settings, usage, files and changes |
+| `ui/` | Compose screens: home, PC list/pairing, PC detail (`dashboard`), session, new-session wizard, settings, usage, files and changes; `ui/theme` (colour, `Dimens`, PC palette), `ui/common` (shared widgets, formatting) |
+
+## Screens and navigation
+
+* **Home** (`home`, `ui/home/`) is the start destination as soon as one PC is paired (zero PCs keeps the pairing onboarding on `hosts`).
+  It connects to *every* paired PC while visible (`rememberLiveHosts` → `rememberHostConnections`, released when it leaves composition)
+  and merges their sessions: **Needs you** (status `waiting`, `pendingUi > 0`, or an unresolved approval / question from `attention.list`
+  and live `hev` events; shows what is asked), **Running**, **Open** (idle managed and terminal sessions), then **Recent** grouped
+  Today / Yesterday / Earlier (first 8, "Show more"). Chips filter by PC (hidden with one PC; each shows the PC colour and connection
+  state). An unreachable PC gets a "<name> unreachable, tap to retry" banner and contributes no sessions; the others are never blocked.
+  The *New session* button asks which PC first (bottom sheet) when several are paired and no chip is selected. Overflow menu: PCs, Settings.
+* **PCs** (`hosts`): cards with a connection dot, open-session count, last connected time; removing asks for confirmation. Tapping a card opens
+  the **PC detail** (`dash/{hostId}`, `DashboardScreen`): that PC's sessions with the same cards and sections, plus *Account usage* and
+  *PC settings*; the back arrow returns to Home.
+* **Session**: header with up-to-two-line title, PC tag and status chip; model / thinking / approval / context / cost chips; transcript with
+  day/time labels, long-press menu (timestamp, copy, select text), tool cards with a state icon, a *Jump to latest* button; approval and
+  question sheets name the PC, show arguments in a monospace block with copy, and a destructive Deny.
+* **Settings** is grouped into titled sections; *Dynamic colour (Material You)* (default on, Android 12+) can be switched off to use the
+  built-in palettes in `ui/theme/Theme.kt` (also what Android 11 and older always use).
+
+Section / ordering / grouping / filter / empty-state logic is plain Kotlin in `ui/home/HomeLogic.kt` (tests: `HomeLogicTest`); PC colours are
+assigned by `hostColorIndices` (stable per host id, collision-free, never recolours an existing PC) and generated from hues with fixed
+lightness by `ui/theme/PcPalette.kt` (tests check >= 4.5:1 text contrast in both themes for any accent). Spacing and shapes come from `Dimens` / `OmprShapes`.
 
 ## Key storage
 
@@ -136,7 +158,7 @@ already on the destination.
 Three screens that exist only for hosts whose `host.info` lists the matching feature (`HostInfo.supports`; an older bridge sends no
 `features`, so it shows none of them):
 
-* **Usage** (`usage`): dashboard overflow menu → *Account usage* (`ui/usage/UsageScreen`). Accounts grouped by provider, one bar per limit
+* **Usage** (`usage`): PC detail screen → *Account usage* chip (`ui/usage/UsageScreen`). Accounts grouped by provider, one bar per limit
   coloured by severity, "resets in …", pull-to-refresh and a refresh button; loading, empty and error states. The bridge caches 60 s.
 * **Files** (`files`): session top-bar overflow menu → *Files* (`ui/files/FilesScreen`). Browses the session's folder with `fs.list`,
   opens a file with `fs.read` in monospace with line numbers, with notices for truncated and binary files and a copy action.

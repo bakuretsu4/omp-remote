@@ -114,7 +114,8 @@ class MainActivity : FragmentActivity() {
         }
         setContent {
             CompositionLocalProvider(LocalGraph provides graph) {
-                OmprTheme {
+                val dynamicColor by graph.settings.dynamicColor.collectAsState(initial = true)
+                OmprTheme(dynamicColor = dynamicColor) {
                     val dl by deeplink
                     OmprNav(deeplink = dl, onDeeplinkConsumed = { deeplink.value = null })
                     ToolRequestDialog(activity = this@MainActivity)

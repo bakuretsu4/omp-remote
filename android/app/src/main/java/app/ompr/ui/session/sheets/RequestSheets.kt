@@ -42,6 +42,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.Block
+import app.ompr.ui.common.MonoBlock
+import app.ompr.ui.common.PcTag
+import app.ompr.ui.common.rememberHostColorIndex
+import app.ompr.ui.common.rememberHostName
+import app.ompr.ui.theme.Dimens
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -64,6 +71,7 @@ import app.ompr.ui.session.CodeBox
 @Composable
 fun RequestSheet(
     request: UiRequest,
+    hostId: String,
     position: Int,
     total: Int,
     busy: Boolean,
@@ -74,10 +82,13 @@ fun RequestSheet(
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
         Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Dimens.xl).padding(bottom = Dimens.xl).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(Dimens.lg),
         ) {
-            if (total > 1) Text("Request $position of $total", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
+                PcTag(rememberHostName(hostId), rememberHostColorIndex(hostId), Modifier.weight(1f, fill = false))
+                if (total > 1) Text("Request $position of $total", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             when (request) {
                 is UiRequest.Approval -> ApprovalContent(request, busy, onAnswer)
                 is UiRequest.Ask -> AskContent(request, busy, onAnswer)
@@ -91,7 +102,7 @@ fun RequestSheet(
                     OutlinedButton(onClick = { onAnswer(UiAnswer.Cancelled, false) }, enabled = !busy) { Text("Cancel request") }
                 }
             }
-            if (busy) Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Spacer(Modifier.size(8.dp)); Text("Sending…") }
+            if (busy) Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Spacer(Modifier.size(Dimens.sm)); Text("Sending…") }
             if (error != null) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -106,28 +117,39 @@ private fun isSession(option: String) = option.contains("session", ignoreCase = 
 private fun ApprovalContent(r: UiRequest.Approval, busy: Boolean, onAnswer: (UiAnswer, Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Filled.Security, null, tint = MaterialTheme.colorScheme.tertiary)
-        Spacer(Modifier.size(10.dp))
+        Spacer(Modifier.size(Dimens.md))
         Column {
             Text("Allow tool?", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(r.tool.ifBlank { r.title }, style = MaterialTheme.typography.headlineSmall)
         }
     }
     if (r.detail.isNotBlank()) {
-        Text("Details", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        CodeBox(r.detail, maxHeight = 260)
+        Column(verticalArrangement = Arrangement.spacedBy(Dimens.xs)) {
+            Text("Command / arguments", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Scrolls inside a bounded height so a long command can still be read in full before approving.
+            Box(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                MonoBlock(r.detail, Modifier.fillMaxWidth(), scrollable = true)
+            }
+        }
     } else if (r.title.isNotBlank()) {
         Text(r.title, style = MaterialTheme.typography.bodyMedium)
     }
     val options = r.options.ifEmpty { listOf("Approve", "Deny") }
     val approve = options.firstOrNull { !isDeny(it) && !isSession(it) }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Dimens.sm)) {
         for (o in options) {
             val modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
             when {
-                isDeny(o) -> OutlinedButton(
+                isDeny(o) -> FilledTonalButton(
                     onClick = { onAnswer(UiAnswer.Value(o), false) }, enabled = !busy, modifier = modifier,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text(o, fontSize = 16.sp) }
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                ) {
+                    Icon(Icons.Filled.Block, null, Modifier.size(18.dp))
+                    Spacer(Modifier.size(Dimens.sm))
+                    Text(o, fontSize = 16.sp)
+                }
                 o == approve -> Button(onClick = { onAnswer(UiAnswer.Value(o), true) }, enabled = !busy, modifier = modifier) { Text(o, fontSize = 16.sp) }
                 else -> FilledTonalButton(onClick = { onAnswer(UiAnswer.Value(o), true) }, enabled = !busy, modifier = modifier) { Text(o, fontSize = 16.sp) }
             }

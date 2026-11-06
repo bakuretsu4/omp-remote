@@ -81,6 +81,9 @@ class ConnectionManager(
             { c -> registerPush(c) },
         )
         scope.launch {
+            conn.connectCount.collect { if (it > 0) settings.setLastConnected(conn.hostId, System.currentTimeMillis()) }
+        }
+        scope.launch {
             conn.hostEvents.collect { ev ->
                 when (ev) {
                     is HostEvent.Attention -> handleAttention(conn.hostId, ev.item, live = true)

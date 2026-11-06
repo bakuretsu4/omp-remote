@@ -20,7 +20,7 @@ If the spec and the Android code disagree, the spec wins; please fix the disagre
 2. **Relay socket** (`URLSessionWebSocketTask`): connect to `/r/<roomId>?role=guest`, 4-byte big-endian peer-id envelope (§2).
 3. **Pairing + handshake** against a real bridge (your own relay; see the root README). Start with a command-line or unit-test harness, not UI.
 4. **Models + session reducer**: decode `Ops`/events tolerantly, keep a `SessionView` the UI renders (see `data/Protocol.kt`, `data/SessionView.kt`).
-5. **Screens**: hosts and pairing, dashboard, session (transcript, composer, approval sheet), new-session wizard, settings.
+5. **Screens**: home (sessions of all PCs: needs you / running / open / recent, PC filter chips), PCs and pairing, per-PC detail, session (transcript, composer, approval sheet), new-session wizard, settings.
 6. **Push** (section 5), then biometric lock, attachments, polish.
 
 ## 3. Crypto mapping (CryptoKit)

@@ -17,11 +17,13 @@ class SettingsStore(context: Context) {
     private val biometricKey = booleanPreferencesKey("biometric_lock")
     private val fcmTokenKey = stringPreferencesKey("fcm_token")
     private val hideInRecentsKey = booleanPreferencesKey("hide_in_recents")
+    private val dynamicColorKey = booleanPreferencesKey("dynamic_color")
     private val defaultApprovalKey = stringPreferencesKey("default_approval_mode")
 
     private fun notifyKey(kind: String) = booleanPreferencesKey("notify_$kind")
     private fun lastSeenKey(hostId: String) = longPreferencesKey("attn_last_seen_$hostId")
     private fun pushRegKey(hostId: String) = stringPreferencesKey("push_reg_$hostId")
+    private fun lastConnectedKey(hostId: String) = longPreferencesKey("last_connected_$hostId")
     private fun hostToolKey(tool: String) = stringPreferencesKey("hosttool_mode_$tool")
 
     val keepConnected: Flow<Boolean> = store.data.map { it[keepConnectedKey] ?: false }
@@ -32,6 +34,10 @@ class SettingsStore(context: Context) {
     /** Sets FLAG_SECURE: blank recents thumbnail, no screenshots / screen sharing of the app. Default ON. */
     val hideInRecents: Flow<Boolean> = store.data.map { it[hideInRecentsKey] ?: true }
     suspend fun setHideInRecents(v: Boolean) = store.edit { it[hideInRecentsKey] = v }.let { }
+
+    /** Material You: follow the wallpaper colours on Android 12+. Default ON; off uses the fixed palette. */
+    val dynamicColor: Flow<Boolean> = store.data.map { it[dynamicColorKey] ?: true }
+    suspend fun setDynamicColor(v: Boolean) = store.edit { it[dynamicColorKey] = v }.let { }
 
     fun notifyEnabled(kind: String): Flow<Boolean> = store.data.map { it[notifyKey(kind)] ?: true }
 
@@ -79,7 +85,12 @@ class SettingsStore(context: Context) {
     suspend fun getHostToolMode(tool: String): ToolMode = hostToolMode(tool).first()
     suspend fun setHostToolMode(tool: String, mode: ToolMode) = store.edit { it[hostToolKey(tool)] = mode.id }.let { }
 
+    /** When this phone last completed a handshake with the host (phone clock, ms); 0 = never. */
+    fun lastConnected(hostId: String): Flow<Long> = store.data.map { it[lastConnectedKey(hostId)] ?: 0L }
+    suspend fun setLastConnected(hostId: String, ts: Long) = store.edit { it[lastConnectedKey(hostId)] = ts }.let { }
+
     suspend fun clearHost(hostId: String) = store.edit {
+        it.remove(lastConnectedKey(hostId))
         it.remove(lastSeenKey(hostId))
         it.remove(pushRegKey(hostId))
     }.let { }

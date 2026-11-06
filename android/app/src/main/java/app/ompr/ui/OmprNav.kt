@@ -29,6 +29,7 @@ import app.ompr.ui.common.CenteredProgress
 import app.ompr.ui.common.LocalGraph
 import app.ompr.ui.common.rememberFragmentActivity
 import app.ompr.ui.dashboard.DashboardScreen
+import app.ompr.ui.home.HomeScreen
 import app.ompr.ui.hosts.HostsScreen
 import app.ompr.ui.hosts.PairScreen
 import app.ompr.ui.newsession.NewSessionScreen
@@ -45,6 +46,7 @@ import java.net.URLEncoder
 private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
 object Routes {
+    const val HOME = "home"
     const val HOSTS = "hosts"
     const val PAIR = "pair"
     const val DASH = "dash/{hostId}"
@@ -87,19 +89,32 @@ fun OmprNav(deeplink: Deeplink?, onDeeplinkConsumed: () -> Unit) {
             return@Surface
         }
         val nav = rememberNavController()
-        val start = if (hosts.size == 1) Routes.dash(hosts[0].hostId) else Routes.HOSTS
+        // Home as soon as a PC is paired; zero PCs keeps the pairing onboarding.
+        val start = androidx.compose.runtime.remember { if (hosts.isEmpty()) Routes.HOSTS else Routes.HOME }
         NavHost(nav, startDestination = start) {
+            composable(Routes.HOME) {
+                HomeScreen(
+                    onOpenSession = { h, sid -> nav.navigate(Routes.session(h, sid)) },
+                    onNewSession = { h -> nav.navigate(Routes.new(h)) },
+                    onHosts = { nav.navigate(Routes.HOSTS) },
+                    onSettings = { nav.navigate(Routes.SETTINGS) },
+                    onNoHosts = { nav.navigate(Routes.HOSTS) { popUpTo(Routes.HOME) { inclusive = true } } },
+                )
+            }
             composable(Routes.HOSTS) {
                 HostsScreen(
                     onOpen = { nav.navigate(Routes.dash(it)) },
                     onPair = { nav.navigate(Routes.PAIR) },
                     onSettings = { nav.navigate(Routes.SETTINGS) },
+                    onBack = if (nav.previousBackStackEntry != null) ({ nav.popBackStack() }) else null,
                 )
             }
             composable(Routes.PAIR) {
                 PairScreen(
-                    onPaired = { id ->
-                        nav.navigate(Routes.dash(id)) { popUpTo(Routes.HOSTS) { inclusive = false } }
+                    onPaired = {
+                        // Back to Home (where the new PC's sessions appear); when Home is not on the stack yet (first pairing), replace the PC list with it.
+                        if (nav.currentBackStack.value.any { e -> e.destination.route == Routes.HOME }) nav.popBackStack(Routes.HOME, inclusive = false)
+                        else nav.navigate(Routes.HOME) { popUpTo(Routes.HOSTS) { inclusive = true } }
                     },
                     onBack = { nav.popBackStack() },
                 )
@@ -111,8 +126,7 @@ fun OmprNav(deeplink: Deeplink?, onDeeplinkConsumed: () -> Unit) {
                     onOpenSession = { sid -> nav.navigate(Routes.session(id, sid)) },
                     onNewSession = { nav.navigate(Routes.new(id)) },
                     onHostSettings = { nav.navigate(Routes.hostSettings(id)) },
-                    onSettings = { nav.navigate(Routes.SETTINGS) },
-                    onHosts = { nav.navigate(Routes.HOSTS) { popUpTo(Routes.HOSTS) { inclusive = true } } },
+                    onHome = { if (!nav.popBackStack(Routes.HOME, inclusive = false)) nav.navigate(Routes.HOME) { popUpTo(Routes.HOSTS) { inclusive = true } } },
                     onUsage = { nav.navigate(Routes.usage(id)) },
                 )
             }
