@@ -41,7 +41,7 @@ node src/cli.ts install-service            # prints the systemctl commands to en
 node src/cli.ts pair                       # prints a QR + link, valid 10 minutes, single use
 ```
 
-Build and install the app: see [`android/README.md`](android/README.md). Without Cloudflare you can run the Node relay on any host: [`relay/README.md`](relay/README.md).
+**Install the app:** download `omp-remote-<version>.apk` from the [latest release](../../releases/latest), check it against the `.sha256` file next to it, and install it (signing certificate SHA-256 `7b7ae8e8c1640b390197d38b974076389726895eded64c9dbc481e6dcec6161f`). To build it yourself, or to publish your own signed release, see [`android/README.md`](android/README.md). Without Cloudflare you can run the Node relay on any host: [`relay/README.md`](relay/README.md).
 
 ## Status
 
