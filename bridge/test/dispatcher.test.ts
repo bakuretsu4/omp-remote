@@ -256,11 +256,23 @@ describe("dispatch basics", () => {
 	it("push.register stores the token for this device only", async () => {
 		const { call, devices } = await rig();
 		devices.add({ did: "did2", label: "o", dpk: "x", kDev: "k2" });
-		devices.setPush("did2", "TOKEN");
+		devices.setPush("did2", { provider: "fcm", token: "TOKEN" });
 		await call("push.register", { provider: "fcm", token: "TOKEN" });
-		assert.equal(devices.get("did1")!.push!.token, "TOKEN");
+		assert.deepEqual(devices.get("did1")!.push, { provider: "fcm", token: "TOKEN" });
 		assert.equal(devices.get("did2")!.push, undefined, "the same token moves to the newest registrant");
 		assert.equal(code((await call("push.register", { provider: "apns", token: "x" })) as never), "invalid");
+	});
+
+	it("push.register accepts a public UnifiedPush endpoint, rejects an internal one, and push.unregister clears it", async () => {
+		const { call, devices } = await rig();
+		const registered = (await call("push.register", { provider: "unifiedpush", endpoint: "https://ntfy.sh/upX" })) as { ok: boolean }; // the test rig returns the untyped reply envelope
+		assert.equal(registered.ok, true);
+		assert.deepEqual(devices.get("did1")!.push, { provider: "unifiedpush", endpoint: "https://ntfy.sh/upX" });
+		assert.equal(code((await call("push.register", { provider: "unifiedpush", endpoint: "https://192.168.1.5/x" })) as never), "invalid");
+		assert.deepEqual(devices.get("did1")!.push, { provider: "unifiedpush", endpoint: "https://ntfy.sh/upX" }, "a rejected registration leaves the old one alone");
+		const cleared = (await call("push.unregister")) as { ok: boolean }; // same untyped envelope
+		assert.equal(cleared.ok, true);
+		assert.equal(devices.get("did1")!.push, undefined);
 	});
 
 	it("blob.get pages bytes", async () => {

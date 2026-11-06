@@ -21,19 +21,28 @@ import { SessionLauncher } from "./launcher.ts";
 import { createBlobStore, type CountingBlobStore } from "./normalize/blobs.ts";
 import { PairingManager, type PairSession } from "./pairing.ts";
 import { PushSender } from "./push.ts";
+import { UnifiedPushSender } from "./unifiedpush.ts";
 import { RelayConnection } from "./relay-client.ts";
 import { assertPrivateDir, ensurePrivateDir, resolveRoots } from "./safefs.ts";
 import { SessionRegistry } from "./sessions.ts";
-import { PeerSync } from "./sync.ts";
+import { Backup } from "./backup.ts";
+import { PeerSync, type PeerSyncDeps, type PeerSyncLike } from "./sync.ts";
 import { TuiDiscovery } from "./tui/index.ts";
 import { UploadManager } from "./uploads.ts";
+import { gitAvailable } from "./files.ts";
+import { probeUsage } from "./usage.ts";
 
 export const BRIDGE_VERSION = "0.1.0";
+
+/** Minimum gap between two wake pushes (see BridgeDaemon.#maybePush). */
+const PUSH_COOLDOWN_MS = 5_000;
 
 export interface DaemonOptions {
 	dir: string;
 	config: Config;
 	log?: (m: string) => void;
+	/** Builds the peer sync; tests inject a fake (the real one needs ssh and rsync to a second machine). */
+	createPeerSync?: (deps: PeerSyncDeps) => PeerSyncLike;
 }
 
 /** First non-internal private IPv4 address, preferring 192.168/10/172.16-31. */
@@ -69,6 +78,8 @@ export class BridgeDaemon {
 	push!: PushSender;
 	/** Capabilities advertised in `host.info`; a feature module adds its name when it is ready to serve its ops. */
 	readonly features = new Set<string>();
+	unifiedPush!: UnifiedPushSender;
+	#lastPushAt = 0;
 
 	readonly #startedAt = Date.now();
 	readonly #channels = new Map<string, Channel>();
@@ -82,13 +93,16 @@ export class BridgeDaemon {
 	#tick: NodeJS.Timeout | undefined;
 	#discovery: { stop(): Promise<void> } | undefined;
 	#uploads: UploadManager | undefined;
-	#peerSync: PeerSync | undefined;
+	#peerSync: PeerSyncLike | undefined;
+	#backup: Backup | undefined;
+	readonly #createPeerSync: (deps: PeerSyncDeps) => PeerSyncLike;
 	#hostTools!: HostToolRouter;
 	#stopped = false;
 
 	constructor(o: DaemonOptions) {
 		this.dir = o.dir;
 		this.config = o.config;
+		this.#createPeerSync = o.createPeerSync ?? (deps => new PeerSync(deps));
 		this.log = o.log ?? ((m: string) => process.stderr.write(`${new Date().toISOString()} ${m}\n`));
 	}
 
@@ -137,11 +151,17 @@ export class BridgeDaemon {
 		if (this.#roots.length === 0) this.log("warning: none of the configured roots exist; the phone cannot browse or start sessions");
 		this.#ompVersion = await ompVersion(cfg.omp.bin);
 		if (!this.#ompVersion) this.log(`warning: could not run \`${cfg.omp.bin} --version\``);
+		this.features.add("files");
+		const [hasGit, hasUsage] = await Promise.all([gitAvailable(), probeUsage(cfg.omp.bin)]);
+		if (hasGit) this.features.add("git");
+		if (hasUsage) this.features.add("usage");
 
 		const blobs = createBlobStore();
 		const inhibitor = new SleepInhibitor({ enabled: cfg.inhibitSleepWhileWorking, log: this.log });
 		this.registry = new SessionRegistry({ inbox: this.inbox, inhibitor, log: this.log });
 		this.push = new PushSender({ serviceAccountPath: cfg.fcm.serviceAccountPath, hostId: this.identity.hostId, log: this.log });
+		this.unifiedPush = new UnifiedPushSender({ hostId: this.identity.hostId, log: this.log });
+		this.features.add("unifiedpush");
 		this.#hostTools = new HostToolRouter({
 			channels: () => this.openChannels(),
 			sendHev: (ch, e) => this.dispatcher.sendHev(ch, e),
@@ -180,6 +200,7 @@ export class BridgeDaemon {
 			roots: () => this.#roots,
 			channels: () => this.openChannels(),
 			log: this.log,
+			peerSync: () => this.#peerSync,
 		});
 		this.pairing = new PairingManager({ identity: this.identity, devices: this.devices, hostName: cfg.name, log: this.log });
 
@@ -209,13 +230,14 @@ export class BridgeDaemon {
 
 		if (cfg.tui.enabled) await this.#startTui(blobs);
 		if (cfg.peer) this.#startPeerSync(cfg.peer);
+		if (cfg.backup) await this.#startBackup(cfg.backup);
 		await this.#listenControl();
 		this.log(`ompr ready: host ${this.identity.hostId}, room ${this.identity.roomId.slice(0, 4)}…, ${this.devices.list().filter(d => !d.revoked).length} paired device(s)`);
 	}
 
 	#startPeerSync(peer: NonNullable<Config["peer"]>): void {
 		const sessionsDir = ompSessionsDir(this.config);
-		const sync = new PeerSync({
+		const sync = this.#createPeerSync({
 			peer,
 			localOmpBin: this.config.omp.bin,
 			localSessionsDir: sessionsDir,
@@ -230,8 +252,22 @@ export class BridgeDaemon {
 		});
 		this.registry.on("removed", () => sync.notifyActivity());
 		this.#peerSync = sync;
+		this.features.add("peer-sync");
 		sync.start();
 		this.log(`peer sync: mirroring sessions to ${peer.ssh}${peer.syncProjects ? " (with project folders)" : ""}`);
+	}
+
+	async #startBackup(backup: NonNullable<Config["backup"]>): Promise<void> {
+		const sessionsDir = ompSessionsDir(this.config);
+		const b = new Backup({ config: backup, sessionsDir, blobsDir: join(dirname(sessionsDir), "blobs"), log: this.log });
+		this.#backup = b;
+		await b.start();
+		if (b.disabledReason) return;
+		this.registry.on("event", (_sid: string, _seq: number, e: { k: string }) => {
+			if (e.k === "agent.end") b.notifyActivity();
+		});
+		this.registry.on("removed", () => b.notifyActivity());
+		this.log(`backup: snapshots in ${backup.dir}, keep ${backup.keep}${backup.intervalSec > 0 ? `, every ${backup.intervalSec}s` : ""}`);
 	}
 
 	async #startTui(blobs: CountingBlobStore): Promise<void> {
@@ -332,14 +368,23 @@ export class BridgeDaemon {
 		conn.start();
 	}
 
-	/** Content-free FCM wake, only when nobody is connected. */
+	/**
+	 * Content-free wake (FCM and/or UnifiedPush), only when nobody is connected. A phone that was just woken connects and
+	 * reads the attention list itself, so wakes within `PUSH_COOLDOWN_MS` of the last one are skipped (this also keeps a
+	 * burst of approvals from tripping a push service's rate limit).
+	 */
 	async #maybePush(): Promise<void> {
-		if (!this.push.enabled || this.openChannels().length > 0) return;
-		const targets = this.devices.list().flatMap(d => (!d.revoked && d.push ? [{ did: d.did, token: d.push.token }] : []));
-		if (targets.length === 0) return;
+		if (this.openChannels().length > 0) return;
+		const now = Date.now();
+		if (now - this.#lastPushAt < PUSH_COOLDOWN_MS) return;
+		const live = this.devices.list().filter(d => !d.revoked && d.push);
+		const fcm = this.push.enabled ? live.flatMap(d => (d.push?.provider === "fcm" ? [{ did: d.did, token: d.push.token }] : [])) : [];
+		const up = live.flatMap(d => (d.push?.provider === "unifiedpush" ? [{ did: d.did, endpoint: d.push.endpoint }] : []));
+		if (fcm.length === 0 && up.length === 0) return;
+		this.#lastPushAt = now;
 		try {
-			const r = await this.push.send(targets);
-			for (const did of r.dead) this.devices.clearPush(did);
+			const [f, u] = await Promise.all([fcm.length > 0 ? this.push.send(fcm) : undefined, up.length > 0 ? this.unifiedPush.send(up) : undefined]);
+			for (const did of [...(f?.dead ?? []), ...(u?.dead ?? [])]) this.devices.clearPush(did);
 		} catch (e) {
 			this.log(`push failed: ${(e as Error).message}`);
 		}
@@ -482,7 +527,12 @@ export class BridgeDaemon {
 			devices: this.devices.list().filter(d => !d.revoked).length,
 			sessions: this.registry.list().map(s => ({ sid: s.sid, kind: s.kind, status: s.status, title: s.title, cwd: s.cwd })),
 			push: this.push.enabled,
+			pushRegistrations: {
+				fcm: this.devices.list().filter(d => !d.revoked && d.push?.provider === "fcm").length,
+				unifiedpush: this.devices.list().filter(d => !d.revoked && d.push?.provider === "unifiedpush").length,
+			},
 			peer: this.config.peer ? { ssh: this.config.peer.ssh, last: this.#peerSync?.lastReport ?? null } : null,
+			backup: this.config.backup ? { dir: this.config.backup.dir, keep: this.config.backup.keep, disabled: this.#backup?.disabledReason ?? null, last: this.#backup?.lastResult ?? null } : null,
 			lan: this.config.lan,
 			tuiControl: this.config.tui.enabled ? (this.config.tui.control ? "control" : "view-only") : "off",
 			allowedApprovalModes: this.config.allowedApprovalModes,
@@ -505,6 +555,7 @@ export class BridgeDaemon {
 		await this.registry?.closeAll();
 		await this.#uploads?.closeAll();
 		await this.#peerSync?.stop();
+		await this.#backup?.stop();
 		for (const ch of this.#channels.values()) ch.close("shutdown");
 		for (const r of this.#relays) r.stop();
 		await Promise.all(this.#embedded.map(r => r.close().catch(() => {})));

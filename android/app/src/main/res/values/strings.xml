@@ -49,4 +49,57 @@
     <string name="status_offline">Offline</string>
 
     <string name="conn_connecting">Connecting to your PC…</string>
+
+    <string name="continue_on">Continue on %1$s</string>
+    <string name="continue_this_pc">this PC</string>
+    <string name="continue_blocked_tui">A live terminal session cannot be stopped from the phone. Close it in the terminal, then continue it from the Recent list.</string>
+    <string name="continue_blocked_no_file">This session has no saved file yet, so it cannot be moved to another PC.</string>
+    <string name="continue_confirm_title">Continue on %1$s?</string>
+    <string name="continue_confirm_body">This stops the session on %1$s, syncs it between the two PCs and opens it on %2$s. Anything the agent is doing right now is interrupted.</string>
+    <string name="continue_confirm_action">Continue</string>
+    <string name="continue_step_checking">Checking both PCs…</string>
+    <string name="continue_step_stopping">Stopping…</string>
+    <string name="continue_step_syncing">Syncing…</string>
+    <string name="continue_step_opening">Opening…</string>
+    <string name="continue_noun_checking">checking the PCs</string>
+    <string name="continue_noun_stopping">stopping the session</string>
+    <string name="continue_noun_syncing">syncing</string>
+    <string name="continue_noun_opening">opening it on the other PC</string>
+    <string name="continue_failed_title">Could not continue on %1$s</string>
+    <string name="continue_failed_at">It failed while %1$s.</string>
+    <string name="continue_failed_stopped">The session is already stopped on %1$s. Retry to carry on from here, or open it from Recent on either PC.</string>
+    <string name="continue_close">Close</string>
+    <string name="continue_nosync_title">Syncing is not set up</string>
+    <string name="continue_nosync_body">To move a session between %1$s and %2$s, one of them needs a \"peer\" entry in its ompr config.json that points at the other (see the bridge README, Peer sync), and its bridge must be up to date. Nothing was stopped.</string>
+    <string name="continue_nothing_copied">Nothing needed copying; opened the copy already on %1$s.</string>
+
+    <string name="usage_title">Account usage</string>
+    <string name="usage_menu">Account usage</string>
+    <string name="usage_refresh">Refresh usage</string>
+    <string name="usage_loading">Asking omp for usage…</string>
+    <string name="usage_empty_title">No accounts found</string>
+    <string name="usage_empty_body">omp on this PC has no logged-in provider accounts to show usage for.</string>
+    <string name="usage_no_limits">No usage data for this account.</string>
+    <string name="usage_updated">Updated %1$s</string>
+
+    <string name="menu_files">Files</string>
+    <string name="menu_changes">Changes</string>
+    <string name="files_title">Files</string>
+    <string name="files_refresh">Refresh</string>
+    <string name="files_copy">Copy file text</string>
+    <string name="files_empty">This folder is empty.</string>
+    <string name="files_empty_file">This file is empty.</string>
+    <string name="files_binary_title">Binary file</string>
+    <string name="files_binary_body">%1$s of binary data cannot be shown as text.</string>
+    <string name="files_truncated">Showing the first %1$s of %2$s.</string>
+    <string name="changes_title">Changes</string>
+    <string name="changes_not_repo_title">Not a git repository</string>
+    <string name="changes_not_repo_body">This session\'s folder is not inside a git repository, so there are no changes to show.</string>
+    <string name="changes_clean_title">No changes</string>
+    <string name="changes_clean_body">The working tree matches the last commit.</string>
+    <string name="changes_truncated">The list was cut: this repository has more changed files than can be shown.</string>
+    <string name="changes_diff_truncated">The diff was cut: it is too large to show in full.</string>
+    <string name="changes_no_diff">No textual changes to show.</string>
+    <string name="changes_unstaged">Unstaged</string>
+    <string name="changes_staged">Staged</string>
 </resources>

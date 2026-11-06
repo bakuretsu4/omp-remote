@@ -658,6 +658,19 @@ data class CreateSessionArgs(
 @Serializable data class FsListResult(val path: String = "", val entries: List<FsEntry> = emptyList())
 @Serializable data class AttentionListResult(val items: List<AttentionItem> = emptyList())
 @Serializable data class SidResult(val sid: String)
+
+/** `peer.sync` result: how many sessions and project folders the bridge moved in either direction. */
+@Serializable
+data class SyncSummary(
+    val pushedSessions: Int = 0,
+    val pulledSessions: Int = 0,
+    val pushedProjects: Int = 0,
+    val pulledProjects: Int = 0,
+    @Serializable(with = FlexLong::class) val durationMs: Long = 0,
+) {
+    val sessionsMoved: Int get() = pushedSessions + pulledSessions
+}
+
 @Serializable data class OpenResult(val snapshot: SessionSnapshot, @Serializable(with = FlexLong::class) val n: Long = 0)
 @Serializable data class HistoryResult(val messages: List<Message> = emptyList(), val hasMore: Boolean = false)
 @Serializable data class ToolOutputResult(val text: String = "", @Serializable(with = FlexLongOrNull::class) val next: Long? = null)

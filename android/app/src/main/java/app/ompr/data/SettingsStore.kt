@@ -45,6 +45,20 @@ class SettingsStore(context: Context) {
     suspend fun setFcmToken(t: String?) = store.edit { if (t == null) it.remove(fcmTokenKey) else it[fcmTokenKey] = t }.let { }
     suspend fun setDefaultApprovalMode(m: String) = store.edit { it[defaultApprovalKey] = m }.let { }
 
+    private val upEnabledKey = booleanPreferencesKey("unifiedpush_enabled")
+    private val upEndpointKey = stringPreferencesKey("unifiedpush_endpoint")
+    private val upErrorKey = stringPreferencesKey("unifiedpush_error")
+
+    /** The user chose UnifiedPush for wake pushes (needs a distributor app such as ntfy). */
+    val unifiedPushEnabled: Flow<Boolean> = store.data.map { it[upEnabledKey] ?: false }
+    /** The URL the distributor gave us; PCs POST content-free wakes to it. Null until the distributor answers. */
+    val unifiedPushEndpoint: Flow<String?> = store.data.map { it[upEndpointKey] }
+    /** Why the distributor refused the last registration (a FailedReason name), for the settings screen. */
+    val unifiedPushError: Flow<String?> = store.data.map { it[upErrorKey] }
+    suspend fun setUnifiedPushEnabled(v: Boolean) = store.edit { it[upEnabledKey] = v }.let { }
+    suspend fun setUnifiedPushEndpoint(v: String?) = store.edit { if (v == null) it.remove(upEndpointKey) else it[upEndpointKey] = v }.let { }
+    suspend fun setUnifiedPushError(v: String?) = store.edit { if (v == null) it.remove(upErrorKey) else it[upErrorKey] = v }.let { }
+
     /** Timestamp (host clock, ms) of the newest attention item already turned into a notification. */
     suspend fun lastSeenAttention(hostId: String): Long = store.data.first()[lastSeenKey(hostId)] ?: 0L
     suspend fun setLastSeenAttention(hostId: String, ts: Long) = store.edit {

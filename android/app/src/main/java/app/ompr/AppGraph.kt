@@ -11,6 +11,7 @@ import app.ompr.net.Pairing
 import app.ompr.security.BiometricGate
 import app.ompr.service.Notifier
 import app.ompr.service.Presence
+import app.ompr.service.UnifiedPushController
 import app.ompr.tools.DeviceTools
 import app.ompr.tools.PhoneToolHandler
 import app.ompr.tools.ToolRuntime
@@ -35,6 +36,7 @@ class AppGraph(val app: Application) {
     val toolRuntime = ToolRuntime()
     val phoneTools = PhoneToolHandler(app, settings, presence, toolRuntime, DeviceTools(app, notifier), notifier)
     val connections = ConnectionManager(app, hosts, settings, notifier, scope, Http.client, phoneTools)
+    val unifiedPush = UnifiedPushController(app, settings) { connections.onPushTokenChanged() }
     val pairing = Pairing(Http.client, hosts)
     val gate = BiometricGate(settings)
 

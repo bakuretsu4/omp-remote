@@ -53,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ompr.data.SessionPhase
+import app.ompr.ui.files.SessionFilesMenu
 import app.ompr.net.ConnState
 import app.ompr.ui.common.AttachmentController
 import app.ompr.ui.common.CenteredProgress
@@ -71,7 +72,15 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionScreen(hostId: String, sid: String, onBack: () -> Unit, onSwitchSession: (String) -> Unit) {
+fun SessionScreen(
+    hostId: String,
+    sid: String,
+    onBack: () -> Unit,
+    onSwitchSession: (String) -> Unit,
+    onOpenOnHost: (hostId: String, sid: String) -> Unit,
+    onOpenFiles: (cwd: String) -> Unit,
+    onOpenChanges: (cwd: String) -> Unit,
+) {
     val graph = LocalGraph.current
     val conn = rememberHostConnection(hostId)
     val activity = rememberFragmentActivity()
@@ -112,9 +121,10 @@ fun SessionScreen(hostId: String, sid: String, onBack: () -> Unit, onSwitchSessi
         if (first != null && first.reqId != dismissedFor) sheetFor = first.reqId else if (first == null) sheetFor = null
     }
 
-    val actions = remember(onSwitchSession, onBack) {
+    val actions = remember(onSwitchSession, onOpenOnHost, onBack) {
         object : SessionSheetActions {
             override fun switchSession(sid: String) = onSwitchSession(sid)
+            override fun openOnHost(hostId: String, sid: String) = onOpenOnHost(hostId, sid)
             override fun leave() = onBack()
             override fun toast(msg: String) { scope.launch { snack.showSnackbar(msg) } }
         }
@@ -158,6 +168,7 @@ fun SessionScreen(hostId: String, sid: String, onBack: () -> Unit, onSwitchSessi
                 },
                 actions = {
                     IconButton(onClick = { showSettings = true }, enabled = view.summary != null) { Icon(Icons.Filled.Tune, "Session settings") }
+                    SessionFilesMenu(conn, view.summary?.cwd, onOpenFiles, onOpenChanges)
                 },
             )
         },

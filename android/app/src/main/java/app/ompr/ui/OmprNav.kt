@@ -35,6 +35,9 @@ import app.ompr.ui.newsession.NewSessionScreen
 import app.ompr.ui.session.SessionScreen
 import app.ompr.ui.settings.HostSettingsScreen
 import app.ompr.ui.settings.SettingsScreen
+import app.ompr.ui.files.ChangesScreen
+import app.ompr.ui.files.FilesScreen
+import app.ompr.ui.usage.UsageScreen
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
 
@@ -53,6 +56,13 @@ object Routes {
     const val SETTINGS = "settings"
     const val HOST_SETTINGS = "hostsettings/{hostId}"
     fun hostSettings(h: String) = "hostsettings/${enc(h)}"
+    const val USAGE = "usage/{hostId}"
+    fun usage(h: String) = "usage/${enc(h)}"
+    const val FILES = "files/{hostId}/{path}"
+    /** Paths may contain spaces: `URLEncoder` writes them as `+`, so use `%20`, which decodes to a space unambiguously. */
+    fun files(h: String, path: String) = "files/${enc(h)}/${enc(path).replace("+", "%20")}"
+    const val CHANGES = "changes/{hostId}/{path}"
+    fun changes(h: String, path: String) = "changes/${enc(h)}/${enc(path).replace("+", "%20")}"
 }
 
 @Composable
@@ -103,6 +113,7 @@ fun OmprNav(deeplink: Deeplink?, onDeeplinkConsumed: () -> Unit) {
                     onHostSettings = { nav.navigate(Routes.hostSettings(id)) },
                     onSettings = { nav.navigate(Routes.SETTINGS) },
                     onHosts = { nav.navigate(Routes.HOSTS) { popUpTo(Routes.HOSTS) { inclusive = true } } },
+                    onUsage = { nav.navigate(Routes.usage(id)) },
                 )
             }
             composable(
@@ -119,6 +130,9 @@ fun OmprNav(deeplink: Deeplink?, onDeeplinkConsumed: () -> Unit) {
                     sid = sid,
                     onBack = { nav.popBackStack() },
                     onSwitchSession = { newSid -> nav.navigate(Routes.session(h, newSid)) { popUpTo(Routes.session(h, sid)) { inclusive = true } } },
+                    onOpenOnHost = { otherHost, otherSid -> nav.navigate(Routes.session(otherHost, otherSid)) { popUpTo(Routes.session(h, sid)) { inclusive = true } } },
+                    onOpenFiles = { cwd -> nav.navigate(Routes.files(h, cwd)) },
+                    onOpenChanges = { cwd -> nav.navigate(Routes.changes(h, cwd)) },
                 )
             }
             composable(Routes.NEW, arguments = listOf(navArgument("hostId") { type = NavType.StringType })) { e ->
@@ -132,6 +146,21 @@ fun OmprNav(deeplink: Deeplink?, onDeeplinkConsumed: () -> Unit) {
             composable(Routes.SETTINGS) { SettingsScreen(onBack = { nav.popBackStack() }, onHostSettings = { nav.navigate(Routes.hostSettings(it)) }) }
             composable(Routes.HOST_SETTINGS, arguments = listOf(navArgument("hostId") { type = NavType.StringType })) { e ->
                 HostSettingsScreen(hostId = e.arguments!!.getString("hostId")!!, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.USAGE, arguments = listOf(navArgument("hostId") { type = NavType.StringType })) { e ->
+                UsageScreen(hostId = e.arguments!!.getString("hostId")!!, onBack = { nav.popBackStack() })
+            }
+            composable(
+                Routes.FILES,
+                arguments = listOf(navArgument("hostId") { type = NavType.StringType }, navArgument("path") { type = NavType.StringType }),
+            ) { e ->
+                FilesScreen(hostId = e.arguments!!.getString("hostId")!!, startPath = e.arguments!!.getString("path")!!, onBack = { nav.popBackStack() })
+            }
+            composable(
+                Routes.CHANGES,
+                arguments = listOf(navArgument("hostId") { type = NavType.StringType }, navArgument("path") { type = NavType.StringType }),
+            ) { e ->
+                ChangesScreen(hostId = e.arguments!!.getString("hostId")!!, path = e.arguments!!.getString("path")!!, onBack = { nav.popBackStack() })
             }
         }
         LaunchedEffect(deeplink) {

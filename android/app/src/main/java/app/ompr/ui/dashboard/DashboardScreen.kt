@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Smartphone
@@ -52,6 +53,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ompr.data.SessionKind
+import app.ompr.R
+import app.ompr.data.Features
+import app.ompr.data.supports
+import androidx.compose.ui.res.stringResource
 import app.ompr.data.SessionSummary
 import app.ompr.net.ConnState
 import app.ompr.net.openRecent
@@ -79,12 +84,14 @@ fun DashboardScreen(
     onHostSettings: () -> Unit,
     onSettings: () -> Unit,
     onHosts: () -> Unit,
+    onUsage: () -> Unit,
 ) {
     val graph = LocalGraph.current
     val conn = rememberHostConnection(hostId)
     val hosts by graph.hosts.hosts.collectAsState()
     val host = hosts.firstOrNull { it.hostId == hostId }
     val state by conn.state.collectAsState()
+    val info by conn.info.collectAsState()
     val list by conn.sessions.collectAsState()
     val scope = rememberCoroutineScope()
     val snack = remember { SnackbarHostState() }
@@ -119,6 +126,9 @@ fun DashboardScreen(
                     IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More") }
                     DropdownMenu(menu, { menu = false }) {
                         DropdownMenuItem(text = { Text("All PCs") }, leadingIcon = { Icon(Icons.Filled.Computer, null) }, onClick = { menu = false; onHosts() })
+                        if (info.supports(Features.USAGE)) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.usage_menu)) }, leadingIcon = { Icon(Icons.Filled.BarChart, null) }, onClick = { menu = false; onUsage() })
+                        }
                         DropdownMenuItem(text = { Text("This PC's settings") }, leadingIcon = { Icon(Icons.Filled.Settings, null) }, onClick = { menu = false; onHostSettings() })
                         DropdownMenuItem(text = { Text("App settings") }, leadingIcon = { Icon(Icons.Filled.Settings, null) }, onClick = { menu = false; onSettings() })
                     }

@@ -25,6 +25,19 @@ export interface PeerConfig {
 	intervalSec: number;
 }
 
+/**
+ * Local disk backup of omp's sessions and blobs into daily snapshot folders (`<dir>/YYYY-MM-DD/{sessions,blobs}`,
+ * hard-linked against the previous snapshot). See `backup.ts`.
+ */
+export interface BackupConfig {
+	/** Absolute path of an existing, writable folder (for example on a spare disk). The bridge never creates it or its parents. */
+	dir: string;
+	/** Background backup period; 0 backs up only at startup and after finished turns. */
+	intervalSec: number;
+	/** Number of daily snapshots to keep. */
+	keep: number;
+}
+
 export interface Config {
 	/** Display name shown in the app. */
 	name: string;
@@ -62,6 +75,8 @@ export interface Config {
 	lanMaxGuestsPerIp: number;
 	/** Optional companion PC to mirror sessions to; absent = no sync. */
 	peer?: PeerConfig;
+	/** Optional local disk backup of sessions and blobs; absent = no backup. */
+	backup?: BackupConfig;
 }
 
 export function defaultConfig(): Config {
@@ -160,7 +175,7 @@ export function parseConfig(raw: unknown): Config {
 	const d = defaultConfig();
 	if (raw === undefined) return d;
 	if (!isRecord(raw)) throw new Error("config: top level must be an object");
-	onlyKeys(raw, ["name", "relays", "lan", "localPort", "lanPort", "lanAddress", "roots", "omp", "defaultApprovalMode", "allowedApprovalModes", "inhibitSleepWhileWorking", "fcm", "maxManagedSessions", "tui", "lanMaxGuestsPerIp", "peer"], "");
+	onlyKeys(raw, ["name", "relays", "lan", "localPort", "lanPort", "lanAddress", "roots", "omp", "defaultApprovalMode", "allowedApprovalModes", "inhibitSleepWhileWorking", "fcm", "maxManagedSessions", "tui", "lanMaxGuestsPerIp", "peer", "backup"], "");
 	const omp = raw.omp === undefined ? {} : raw.omp;
 	if (!isRecord(omp)) throw new Error("config: omp must be an object");
 	const fcm = raw.fcm === undefined ? {} : raw.fcm;
@@ -206,6 +221,8 @@ export function parseConfig(raw: unknown): Config {
 	if (lanAddress) cfg.lanAddress = lanAddress;
 	const peer = parsePeer(raw.peer);
 	if (peer) cfg.peer = peer;
+	const backup = parseBackup(raw.backup);
+	if (backup) cfg.backup = backup;
 	const sessionsDir = optStr(omp.sessionsDir, "omp.sessionsDir");
 	if (sessionsDir) cfg.omp.sessionsDir = sessionsDir;
 	const sessionDir = optStr(omp.sessionDir, "omp.sessionDir");
@@ -229,4 +246,17 @@ export function ompSessionsDir(cfg: Config): string {
 	if (cfg.omp.sessionsDir) return cfg.omp.sessionsDir.startsWith("~/") ? join(homedir(), cfg.omp.sessionsDir.slice(2)) : cfg.omp.sessionsDir;
 	if (cfg.omp.sessionDir) return cfg.omp.sessionDir.startsWith("~/") ? join(homedir(), cfg.omp.sessionDir.slice(2)) : cfg.omp.sessionDir;
 	return join(homedir(), ".omp", "agent", "sessions");
+}
+
+function parseBackup(raw: unknown): BackupConfig | undefined {
+	if (raw === undefined || raw === null) return undefined;
+	if (!isRecord(raw)) throw new Error("config: backup must be an object");
+	onlyKeys(raw, ["dir", "intervalSec", "keep"], "backup.");
+	const dir = optStr(raw.dir, "backup.dir");
+	if (!dir) throw new Error("config: backup.dir is required (an absolute folder path)");
+	return {
+		dir,
+		intervalSec: int(raw.intervalSec, 3600, "backup.intervalSec", 0, 86_400),
+		keep: int(raw.keep, 7, "backup.keep", 1, 365),
+	};
 }

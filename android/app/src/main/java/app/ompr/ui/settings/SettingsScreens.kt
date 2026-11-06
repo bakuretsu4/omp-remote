@@ -218,6 +218,7 @@ fun SettingsScreen(onBack: () -> Unit, onHostSettings: (String) -> Unit) {
                 else "Push wake-ups are not enabled in this build (no google-services.json). Notifications arrive while the app is connected; turn on “Keep connected” for background delivery.",
                 Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            UnifiedPushSection()
 
             SectionTitle("About")
             ListItem(headlineContent = { Text("OMP Remote") }, supportingContent = { Text("Version ${BuildConfig.VERSION_NAME} · protocol 1") })

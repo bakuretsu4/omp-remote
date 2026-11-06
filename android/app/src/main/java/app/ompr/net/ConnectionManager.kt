@@ -10,6 +10,8 @@ import app.ompr.data.HostEvent
 import app.ompr.data.HostRepository
 import app.ompr.data.SettingsStore
 import app.ompr.service.Notifier
+import app.ompr.service.PushChoice
+import app.ompr.service.PushRouting
 import app.ompr.service.PushTokens
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -116,12 +118,23 @@ class ConnectionManager(
     }
 
     private suspend fun registerPush(conn: HostConnection) {
-        if (!BuildConfig.PUSH_ENABLED) return
-        if (conn.info.value?.push != true) return
-        val token = PushTokens.current(context, settings) ?: return
-        if (settings.pushRegisteredToken(conn.hostId) == token) return
-        conn.pushRegister(token)
-        settings.setPushRegisteredToken(conn.hostId, token)
+        val fcmToken = if (BuildConfig.PUSH_ENABLED) PushTokens.current(context, settings) else null
+        val choice = PushRouting.choose(conn.info.value, settings.unifiedPushEnabled.first(), settings.unifiedPushEndpoint.first(), fcmToken)
+        val registered = settings.pushRegisteredToken(conn.hostId)
+        if (choice == null) {
+            // Nothing to register any more (for example UnifiedPush was turned off): tell the PC to forget this phone.
+            if (registered != null) {
+                runCatching { conn.pushUnregister() }
+                settings.setPushRegisteredToken(conn.hostId, null)
+            }
+            return
+        }
+        if (registered == choice.key) return
+        when (choice) {
+            is PushChoice.Fcm -> conn.pushRegister(choice.token)
+            is PushChoice.UnifiedPush -> conn.pushRegisterUnified(choice.endpoint)
+        }
+        settings.setPushRegisteredToken(conn.hostId, choice.key)
     }
 
     /** Called when a new FCM token is issued: re-register with every host that is (or becomes) connected. */

@@ -265,6 +265,17 @@ export class PeerSync {
 		return run;
 	}
 
+	/**
+	 * A run that is guaranteed to START after this call. `syncNow()` hands back a run already in flight, and that run may
+	 * have inspected the leases before the caller released a session (a handover stops the session first), so it can
+	 * report success while skipping exactly the session the caller needs mirrored.
+	 */
+	async syncFresh(): Promise<SyncReport> {
+		const current = this.#inFlight;
+		if (current) await current.catch(() => {});
+		return this.syncNow();
+	}
+
 	async #runOnce(): Promise<SyncReport> {
 		const t0 = Date.now();
 		try {
@@ -442,3 +453,6 @@ export class PeerSync {
 		};
 	}
 }
+
+/** The part of `PeerSync` the daemon drives; a daemon can be given a fake of this (tests). */
+export type PeerSyncLike = Pick<PeerSync, "start" | "stop" | "notifyActivity" | "syncFresh" | "lastReport">;

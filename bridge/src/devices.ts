@@ -5,6 +5,12 @@ import { isRecord } from "./guards.ts";
 import { paths } from "./config.ts";
 import { readJsonIfExists, writePrivateFile } from "./safefs.ts";
 
+/** How to wake a phone: an FCM token, or a UnifiedPush endpoint URL (see unifiedpush.ts). */
+export type PushRegistration = { provider: "fcm"; token: string } | { provider: "unifiedpush"; endpoint: string };
+
+/** The secret part of a registration: what the phone registered and what other devices must not share. */
+export const pushKey = (p: PushRegistration): string => (p.provider === "fcm" ? p.token : p.endpoint);
+
 export interface Device {
 	did: string;
 	label: string;
@@ -15,7 +21,7 @@ export interface Device {
 	lastSeen: number;
 	revoked: boolean;
 	revokedAt?: number;
-	push?: { provider: "fcm"; token: string };
+	push?: PushRegistration;
 }
 
 const SAVE_DEBOUNCE_MS = 2000;
@@ -29,6 +35,7 @@ function parseDevice(raw: unknown): Device | null {
 	if (typeof raw.revokedAt === "number") d.revokedAt = raw.revokedAt;
 	const p = raw.push;
 	if (isRecord(p) && p.provider === "fcm" && typeof p.token === "string") d.push = { provider: "fcm", token: p.token };
+	else if (isRecord(p) && p.provider === "unifiedpush" && typeof p.endpoint === "string") d.push = { provider: "unifiedpush", endpoint: p.endpoint };
 	return d;
 }
 
@@ -98,18 +105,19 @@ export class DeviceStore extends EventEmitter {
 		this.#saveSoon();
 	}
 
-	setPush(did: string, token: string): boolean {
+	setPush(did: string, push: PushRegistration): boolean {
 		const d = this.get(did);
 		if (!d) return false;
-		d.push = { provider: "fcm", token };
+		d.push = push;
 		this.#saveNow();
 		return true;
 	}
 
-	clearPush(did: string, token?: string): void {
+	/** Removes a device's registration; with `key` only when it is exactly that token or endpoint. */
+	clearPush(did: string, key?: string): void {
 		const d = this.#devices.get(did);
 		if (!d?.push) return;
-		if (token !== undefined && !constantTimeEqual(d.push.token, token)) return;
+		if (key !== undefined && !constantTimeEqual(pushKey(d.push), key)) return;
 		delete d.push;
 		this.#saveNow();
 	}

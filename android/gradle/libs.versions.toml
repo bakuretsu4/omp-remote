@@ -19,6 +19,8 @@ coreKtx = "1.15.0"
 appcompat = "1.7.0"
 coil = "2.7.0"
 exif = "1.3.7"
+# 3.0.10 is the newest connector built against Kotlin 2.0.x like this project; 3.1+ need a Kotlin 2.2+ compiler.
+unifiedpush = "3.0.10"
 junit = "4.13.2"
 
 [libraries]
@@ -51,6 +53,7 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 markdown-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdown" }
 markdown-core = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdown" }
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
+unifiedpush-connector = { module = "org.unifiedpush.android:connector", version.ref = "unifiedpush" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 junit = { module = "junit:junit", version.ref = "junit" }

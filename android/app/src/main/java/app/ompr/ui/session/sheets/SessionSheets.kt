@@ -59,6 +59,8 @@ import kotlinx.coroutines.launch
 interface SessionSheetActions {
     fun switchSession(sid: String)
     fun leave()
+    /** Opens [sid] on another paired PC (after "Continue on…" moved the session there). */
+    fun openOnHost(hostId: String, sid: String)
     fun toast(msg: String)
 }
 
@@ -193,6 +195,7 @@ fun SessionSettingsSheet(view: SessionView, handle: SessionHandle, actions: Sess
                 OutlinedButton(onClick = { renameDialog = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Rename") }
                 OutlinedButton(onClick = { confirmStop = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Stop session…") }
             }
+            ContinueOnOtherPc(view, handle.conn.hostId, handle.sid, actions)
             if (sum?.kind == SessionKind.TUI) {
                 OutlinedButton(
                     onClick = { run { val sid = handle.handover(); onDismiss(); actions.switchSession(sid) } },

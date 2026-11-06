@@ -1,0 +1,28 @@
+{
+	"generatedAt": 1790000000000,
+	"reports": [
+		{
+			"provider": "anthropic",
+			"fetchedAt": 1790000000000,
+			"limits": [
+				{ "id": "anthropic:5h", "label": "Claude 5 Hour", "scope": { "provider": "anthropic", "windowId": "5h", "shared": true }, "window": { "id": "5h", "label": "5 Hour", "durationMs": 18000000 }, "amount": { "used": 0, "limit": 100, "remaining": 100, "usedFraction": 0, "remainingFraction": 1, "unit": "percent" }, "status": "ok" },
+				{ "id": "anthropic:7d", "label": "Claude 7 Day", "scope": { "provider": "anthropic", "windowId": "7d", "shared": true }, "window": { "id": "7d", "label": "7 Day", "durationMs": 604800000, "resetsAt": 1790100000000 }, "amount": { "used": 96, "limit": 100, "remaining": 4, "usedFraction": 0.96, "remainingFraction": 0.04, "unit": "percent" }, "status": "warning" },
+				{ "id": "anthropic:extra", "label": "Extra usage", "scope": { "provider": "anthropic", "windowId": "extra" }, "amount": { "used": 1.11, "unit": "usd" } }
+			],
+			"metadata": { "endpoint": "https://example.invalid/usage", "accountId": "acct-demo-1", "email": "demo-one@example.invalid", "orgId": "org-demo-1", "orgName": "Demo Org One" }
+		},
+		{
+			"provider": "openai-codex",
+			"fetchedAt": 1790000000000,
+			"limits": [
+				{ "id": "codex:30d", "label": "Codex 30 Day", "scope": { "provider": "openai-codex", "windowId": "30d", "shared": true }, "window": { "id": "30d", "label": "30 Day", "durationMs": 2592000000, "resetsAt": 1792000000000 }, "amount": { "used": 33, "limit": 100, "remaining": 67, "usedFraction": 0.33, "remainingFraction": 0.67, "unit": "percent" }, "status": "ok" }
+			],
+			"metadata": { "planType": "plus", "allowed": true, "limitReached": false, "email": "demo-two@example.invalid", "accountId": "acct-demo-2", "orgId": "org-demo-2" }
+		}
+	],
+	"accountsWithoutUsage": [
+		{ "provider": "anthropic", "type": "oauth", "email": "demo-three@example.invalid", "accountId": "acct-demo-3", "orgId": "org-demo-3", "orgName": "Demo Org Three", "authorizedAt": 1780000000000 }
+	],
+	"disabledCredentials": [],
+	"capacity": {}
+}

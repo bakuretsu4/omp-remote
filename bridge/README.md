@@ -81,6 +81,11 @@ State lives in `$OMPR_HOME` (default `~/.config/ompr`): directory `0700`, files 
     "ompBin": "~/.local/bin/omp",    // omp on the peer (needs `omp session lease`)
     "syncProjects": true,            // also mirror each session's project folder
     "intervalSec": 300               // periodic catch-up; 0 = only on turn end, session close, startup
+  },
+  "backup": {                        // optional local-disk backup of sessions + blobs, see "Backups"
+    "dir": "/mnt/hdd/ompr-backup",   // absolute path of an EXISTING writable folder; never created for you
+    "intervalSec": 3600,             // 0 = only at startup and after finished turns
+    "keep": 7                        // daily snapshots to keep (1..365)
   }
 }
 ```
@@ -121,6 +126,34 @@ Rules the sync follows:
   forwarding, so it works when the peer's sshd has `AllowTcpForwarding no`; `login --via=user@peer` does need forwarding, and a non-interactive ssh may not have `omp` on `PATH`.
   Copying the vault would let two machines refresh the same OAuth token and invalidate each other.
 
+**From the phone.** A bridge with `peer` advertises `peer-sync`, and the app's session menu offers **Continue on \<other PC\>**:
+it stops the session where it runs (a running session holds the lease and syncs skip held sessions), runs `peer.sync` on a
+PC that advertises `peer-sync` (the destination when both do), then opens the session file on the destination. The bridges
+must be configured as each other's `peer`, and both need the same session directory (`omp.sessionsDir`) path. If neither
+bridge has a `peer`, the app says so and stops nothing. Terminal (TUI) sessions cannot be moved: they cannot be stopped from the
+phone. `peer.sync` always runs a sync that starts after the request, waits up to 15 min, and reports
+`sync with the peer failed: …` (one line) when ssh or rsync fail.
+
+### Backups (a second copy on a local disk)
+
+With `backup` set, the bridge copies omp's `sessions` folder and its sibling `blobs` folder into daily snapshot folders
+`<dir>/YYYY-MM-DD/{sessions,blobs}` with `rsync -a --link-dest=<newest older snapshot>`: files that did not change are hard
+links, so a snapshot costs only what changed, and every snapshot is a complete, browsable copy. It runs at startup, every
+`intervalSec`, and a few seconds after a finished turn or closed session; today's snapshot is updated in place. `ompr backup`
+does one run and exits; `ompr status` shows the last result.
+
+- The source is only read. Nothing inside a snapshot is deleted: a session you delete today is still in today's snapshot and is
+  absent from tomorrow's. Retention removes only folders named exactly `YYYY-MM-DD` beyond the newest `keep`; anything else in
+  `dir` is never touched.
+- `dir` must exist: the bridge creates only the final `<dir>/YYYY-MM-DD` folder, never `dir` or its parents. It refuses to
+  start the backup (one log line, backup stays off until restart) when `dir` is not an absolute path, does not exist, is not a
+  writable folder, is inside omp's sessions or blobs folder, or contains them. If the disk is unmounted later, a run fails with
+  "does not exist" and the next one retries. Mind that a mount point that exists while nothing is mounted is just a folder on the
+  system disk.
+- A transcript that is still being written can be copied up to a half-written last line; the next run copies the rest, and a
+  finished turn triggers one.
+- Needs `rsync`. Login credentials are not part of `sessions`/`blobs` and are not backed up.
+
 ### Attaching TUI sessions
 
 TUI sessions are visible when their collab host talks to the **local** relay. In omp's settings:
@@ -141,6 +174,26 @@ Set `fcm.serviceAccountPath` to a Firebase service-account JSON. When an attenti
 the bridge sends one content-free FCM data message `{"w":"1","h":"<hostId>"}` to each device that registered a token
 (`push.register`). The app wakes, connects, reads `attention.list` and builds notifications locally. Tokens FCM reports as
 `UNREGISTERED` are dropped. Without the file, push is off and `ompr doctor` says so.
+
+### Push without Google (UnifiedPush)
+
+Nothing to configure on the PC: any paired phone whose app registers a UnifiedPush endpoint (see `android/README.md`) gets the same
+content-free wake over plain HTTPS, via the distributor app on the phone (ntfy is the usual one; the public `ntfy.sh` works, and the
+message contains no session data). Only public `https` endpoints are accepted, so a paired phone cannot make the bridge call anything
+on your network. `ompr status` shows the push line; a registration the push service reports as gone is dropped automatically.
+
+### Usage, files and git
+
+Three optional features, listed in `host.info` `features` only when they can work, so the app shows the matching menu entries
+only for hosts that offer them (details: docs/PROTOCOL.md §6.10):
+
+- **`usage`**: account quota windows. The bridge runs `<omp.bin> usage --json` (60 s timeout, answers cached for 60 s) and maps it
+  to accounts with per-limit used fraction and reset time. Listed when `omp usage --help` exits 0 at startup, so an old omp simply
+  does not offer it. The output contains your account e-mails; the bridge never logs it.
+- **`files`**: `fs.read` shows a text file (128 KiB by default, 256 KiB at most; binary files are reported, not sent) from under `roots`.
+- **`git`**: `git.status` / `git.diff` for a session's folder. Listed when `git --version` works. Needs git on the PC's `PATH`
+  (`/usr/local/bin:/usr/bin:/bin` is what the bridge hands to git). Submodules are not descended into, and clean/smudge filters
+  defined in a repository's own config are disabled for these calls (git-lfs from your global config keeps working).
 
 ## Security model
 
@@ -165,6 +218,11 @@ the bridge sends one content-free FCM data message `{"w":"1","h":"<hostId>"}` to
 - Filesystem access is limited to `roots`: every path is `realpath`-resolved and must stay under a root (symlinks and `..` cannot
   escape; links pointing out are hidden from listings). Uploaded files land in `<session cwd>/.ompr-inbox/` (0700, files 0600,
   sanitized names, never overwriting, symlinked inboxes refused, added to `.git/info/exclude`).
+- `fs.read`, `git.status` and `git.diff` (the phone's Files and Changes screens) are read-only, go through the same `realpath` check,
+  cap file reads at 256 KiB and git output at 200 KiB, and spawn git with fixed argv and a scrubbed environment. A repository's own
+  config cannot run programs through them (`core.fsmonitor`, `core.pager`, `diff.external`, textconv, `filter.*` clean/smudge/process
+  are all switched off for these calls; `test/files.test.ts` proves it with marker files). A repository whose work-tree root lies
+  outside `roots` is refused.
 - Session files opened from the phone must live in omp's session directory and belong to a cwd under a root. `sessions.open` also refuses (`busy`)
   a session that another running omp still holds (typically an open terminal), using `omp session lease`, so two writers never share one session file.
 - The daemon refuses to run as root.

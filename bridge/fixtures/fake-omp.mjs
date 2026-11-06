@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Minimal stand-in for `omp --mode rpc-ui` (omp://rpc.md) used by the managed-backend tests.
 import { createInterface } from "node:readline";
+import { readFileSync } from "node:fs";
 
 if (process.argv.includes("--version")) {
 	console.log("omp/0.0.0-fake");
@@ -12,6 +13,20 @@ if (process.argv[2] === "session" && process.argv[3] === "lease") {
 	const csv = name => (process.env[name] ?? "").split(",").filter(Boolean);
 	const ids = process.argv.slice(process.argv.indexOf("--") + 1);
 	console.log(JSON.stringify({ held: ids.filter(i => csv("FAKE_LEASE_HELD").includes(i)), unknown: ids.filter(i => csv("FAKE_LEASE_UNKNOWN").includes(i)) }));
+	process.exit(0);
+}
+
+// `omp usage --help` / `omp usage --json`: serves fixtures/usage.sample.json (invented data). FAKE_USAGE_FAIL=1 makes `--json` fail.
+if (process.argv[2] === "usage") {
+	if (process.argv.includes("--help")) {
+		console.log("Show provider usage limits for every authenticated account");
+		process.exit(0);
+	}
+	if (process.env.FAKE_USAGE_FAIL) {
+		console.error("fake usage failure");
+		process.exit(3);
+	}
+	process.stdout.write(readFileSync(new URL("./usage.sample.json", import.meta.url)));
 	process.exit(0);
 }
 

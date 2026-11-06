@@ -15,13 +15,17 @@ import type { Channel, Outgoing } from "./channel.ts";
 import { APPROVAL_MODES, ompSessionsDir, type Config } from "./config.ts";
 import type { DeviceStore } from "./devices.ts";
 import { OpError, invalid, notFound, toWireError, unsupported } from "./errors.ts";
+import { fsRead, gitDiff, gitStatus } from "./files.ts";
 import { isRecord } from "./guards.ts";
 import type { HostToolRouter } from "./hosttools.ts";
 import type { SessionLauncher } from "./launcher.ts";
+import { runPeerSyncOp, type PeerSyncRunner } from "./peer-op.ts";
+import { registerPush } from "./push-register.ts";
 import { listRecentSessions } from "./recent.ts";
 import { expandPath, isUnder, realpathUnder } from "./safefs.ts";
 import type { SessionRegistry } from "./sessions.ts";
 import type { UploadManager } from "./uploads.ts";
+import { UsageService } from "./usage.ts";
 
 export interface DispatcherDeps {
 	config: Config;
@@ -37,6 +41,8 @@ export interface DispatcherDeps {
 	roots: () => string[];
 	channels: () => Channel[];
 	log: (m: string) => void;
+	/** The configured peer sync, if any (looked up per call: the daemon creates it after the dispatcher). */
+	peerSync?: () => PeerSyncRunner | undefined;
 }
 
 const MAX_INFLIGHT = 64;
@@ -258,6 +264,7 @@ export class Dispatcher {
 
 	#buildHandlers(): Handlers {
 		const d = this.#d;
+		const usage = new UsageService({ bin: d.config.omp.bin });
 		return {
 			"host.info": () => d.hostInfo(),
 
@@ -313,11 +320,12 @@ export class Dispatcher {
 			},
 
 			"push.register": (c, a) => {
-				const args = obj(a);
-				if (args.provider !== "fcm") throw invalid("provider must be fcm");
-				const token = str(args, "token", 4096);
-				for (const dev of d.devices.list()) if (dev.did !== c.did) d.devices.clearPush(dev.did, token);
-				d.devices.setPush(c.did, token);
+				registerPush(d.devices, c.did, a);
+				return {};
+			},
+
+			"push.unregister": c => {
+				d.devices.clearPush(c.did);
 				return {};
 			},
 
@@ -332,22 +340,12 @@ export class Dispatcher {
 				return {};
 			},
 
-			// Replaced by their feature modules; until then a bridge answers "unsupported" and does not list them in host.info features.
-			"peer.sync": () => {
-				throw unsupported("this bridge has no peer configured");
-			},
-			"usage.get": () => {
-				throw unsupported("usage is not available on this bridge");
-			},
-			"fs.read": () => {
-				throw unsupported("file reading is not available on this bridge");
-			},
-			"git.status": () => {
-				throw unsupported("git is not available on this bridge");
-			},
-			"git.diff": () => {
-				throw unsupported("git is not available on this bridge");
-			},
+			// Usage, file reading and git: logic lives in usage.ts / files.ts; host.info lists the matching features once the daemon has probed them.
+			"peer.sync": () => runPeerSyncOp(d.peerSync?.(), d.log),
+			"usage.get": () => usage.get(),
+			"fs.read": (_c, a) => fsRead(obj(a).path, obj(a).maxBytes, d.roots()),
+			"git.status": (_c, a) => gitStatus(obj(a).path, d.roots()),
+			"git.diff": (_c, a) => gitDiff(obj(a).path, obj(a).file, obj(a).staged, d.roots()),
 
 			"sessions.list": async (_c, a) => {
 				const recent = obj(a).recent;

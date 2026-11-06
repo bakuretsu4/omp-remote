@@ -39,6 +39,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 const val UPLOAD_CHUNK_BYTES = 192 * 1024
 
+/** The bridge gives `peer.sync` up to 15 min before answering `timeout`; the phone waits 5 min, and the sync carries on in the background. */
+const val PEER_SYNC_TIMEOUT_MS = 300_000L
+
 fun UiAnswer.toJson(): JsonObject = when (this) {
     is UiAnswer.Value -> buildJsonObject { put("value", value) }
     is UiAnswer.Confirmed -> buildJsonObject { put("confirmed", confirmed) }
@@ -90,6 +93,14 @@ suspend fun HostConnection.pushRegister(token: String) {
     request("push.register", obj("provider" to "fcm", "token" to token))
 }
 
+suspend fun HostConnection.pushRegisterUnified(endpoint: String) {
+    request("push.register", obj("provider" to "unifiedpush", "endpoint" to endpoint))
+}
+
+suspend fun HostConnection.pushUnregister() {
+    request("push.unregister", obj())
+}
+
 suspend fun HostConnection.devicesList(): List<DeviceEntry> =
     call("devices.list", obj(), DevicesListResult.serializer()).devices
 
@@ -104,9 +115,13 @@ suspend fun HostConnection.createSession(args: CreateSessionArgs): String =
 suspend fun HostConnection.openRecent(sessionFile: String): String =
     call("sessions.open", obj("sessionFile" to sessionFile), SidResult.serializer(), 60_000).sid
 
-suspend fun HostConnection.stopSession(sid: String) {
-    request("sessions.stop", obj("sid" to sid))
+suspend fun HostConnection.stopSession(sid: String, timeoutMs: Long = 20_000) {
+    request("sessions.stop", obj("sid" to sid), timeoutMs)
 }
+
+/** Mirrors sessions with this PC's configured peer (`features` has "peer-sync"). A big sync takes minutes: the wait is generous. */
+suspend fun HostConnection.peerSync(timeoutMs: Long = PEER_SYNC_TIMEOUT_MS): app.ompr.data.SyncSummary =
+    call("peer.sync", obj(), app.ompr.data.SyncSummary.serializer(), timeoutMs)
 
 /** tui → managed. Fails with `busy` while the TUI still holds the session lease. */
 suspend fun HostConnection.handoverSession(sid: String): String =

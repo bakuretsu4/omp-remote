@@ -261,7 +261,7 @@ export interface SyncSummary {
 export interface FsReadResult { path: string; size: number; truncated: boolean; binary: boolean; text?: string }
 
 /** `status` is the two-character `git status --porcelain=v1` code, e.g. " M", "??", "A ". */
-export interface GitStatusResult { root: string; branch: string | null; files: { path: string; status: string }[] }
+export interface GitStatusResult { root: string; branch: string | null; files: { path: string; status: string }[]; /** True when the list was cut at the output cap. */ truncated?: boolean }
 
 export interface PromptArgs {
 	sid: string;
@@ -279,7 +279,9 @@ export interface Ops {
 	"fs.list": { a: { path: string; files?: boolean }; d: { path: string; entries: FsEntry[] } };
 	"attention.list": { a: { since?: number }; d: { items: AttentionItem[] } };
 	"attention.dismiss": { a: { id: string }; d: {} };
-	"push.register": { a: { provider: "fcm"; token: string }; d: {} };
+	/** `unifiedpush`: `endpoint` is the https URL the phone's distributor app (e.g. ntfy) gave it. The bridge POSTs content-free wakes `{"w":"1","h":"<hostId>"}` to it. */
+	"push.register": { a: { provider: "fcm"; token: string } | { provider: "unifiedpush"; endpoint: string }; d: {} };
+	"push.unregister": { a: {}; d: {} };
 	"devices.list": { a: {}; d: { devices: { did: string; label: string; lastSeen: number; current: boolean }[] } };
 	"devices.revoke": { a: { did: string }; d: {} };
 

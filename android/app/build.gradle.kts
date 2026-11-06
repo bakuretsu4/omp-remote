@@ -125,6 +125,8 @@ dependencies {
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // UnifiedPush: wake pushes without Google (docs/PROTOCOL.md section 6.4). Works with a distributor app such as ntfy.
+    implementation(libs.unifiedpush.connector)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

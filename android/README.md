@@ -64,7 +64,7 @@ uninstall the debug app first. That deletes its stored PC keys, so pair each PC 
 | `service/` | foreground `ConnectionService` ("Keep connected"), notifications, FCM `PushService` |
 | `security/` | optional biometric gate (app open + approvals) |
 | `tools/` | phone-as-agent-tools: `PhoneToolHandler` (policy, consent, budgets), `DeviceTools` (location, clipboard, notification, camera), `ToolRuntime` (confirmation requests + the on-screen activity) |
-| `ui/` | Compose screens: hosts/pairing, dashboard, session, new-session wizard, settings |
+| `ui/` | Compose screens: hosts/pairing, dashboard, session, new-session wizard, settings, usage, files and changes |
 
 ## Key storage
 
@@ -119,6 +119,34 @@ them, **every tool is Off** until the user picks a mode in Settings → Phone to
 * `phone_notify` is limited to 10 per minute; clipboard text to 20,000 characters.
 * Android's `CAMERA` permission is declared (for the QR scanner), so the system camera path asks for it at first use.
 
+## Continue on another PC (docs/PROTOCOL.md §6.9)
+
+With two or more paired PCs, a managed session's menu (the Tune sheet) lists **Continue on \<PC\>**. After a confirm dialog the app
+runs `net/PcHandover` (plain Kotlin, unit-tested with fakes in `PcHandoverTest`): read `features` of both PCs and pick the one
+advertising `peer-sync` (the destination if both) → `sessions.stop` on the source → `peer.sync` (5 min wait) → `sessions.open
+{sessionFile}` on the destination → navigate to it. If neither PC advertises `peer-sync` the dialog says what is needed and
+nothing is stopped. A failure shows the step that failed with **Retry**, which resumes at that step (stop of an already gone
+session counts as done). TUI sessions are disabled with an explanation, since the phone cannot stop them. The destination PC
+does not have to be connected: the app dials it on demand (`ConnectedHandoverHost` holds its connection for the duration, up to 30 s to connect).
+The sync summary does not say whether *this* session moved, so when it reports nothing copied the app tells you it opened the copy
+already on the destination.
+
+## Account usage, Files and Changes (docs/PROTOCOL.md §6.10)
+
+Three screens that exist only for hosts whose `host.info` lists the matching feature (`HostInfo.supports`; an older bridge sends no
+`features`, so it shows none of them):
+
+* **Usage** (`usage`): dashboard overflow menu → *Account usage* (`ui/usage/UsageScreen`). Accounts grouped by provider, one bar per limit
+  coloured by severity, "resets in …", pull-to-refresh and a refresh button; loading, empty and error states. The bridge caches 60 s.
+* **Files** (`files`): session top-bar overflow menu → *Files* (`ui/files/FilesScreen`). Browses the session's folder with `fs.list`,
+  opens a file with `fs.read` in monospace with line numbers, with notices for truncated and binary files and a copy action.
+* **Changes** (`git`): the same menu → *Changes* (`ui/files/ChangesScreen`). `git.status` as a list with status badges; a tap opens
+  the file's `git.diff` with added / removed / hunk lines tinted (staged and unstaged switch for files that have both). Untracked files
+  open in the file viewer instead (git has no diff for them). A folder outside any repository shows "Not a git repository".
+
+Pure logic is plain Kotlin with JVM tests: usage formatting (`ui/usage/UsageFormat.kt`, `UsageFormatTest`), status-code decoding, diff-line
+classification, path helpers (`ui/files/FileLogic.kt`, `FileLogicTest`), and the wire models (`data/Insights.kt`, `InsightsTest`).
+
 ## Connection robustness
 
 Unauthenticated, junk or replayed frames from whoever holds the host seat never produce a terminal error: the channel is
@@ -142,6 +170,16 @@ notifies while connected / while "Keep connected" is on). To enable wake-up push
 2. Rebuild. The Gradle script applies the `com.google.gms.google-services` plugin only when that file exists.
 3. On the PC configure the bridge with a service account for the same project so it can send FCM HTTP v1 data messages
    `{w:"1", h:"<hostId>"}`. The app registers its token with `push.register` on every connect.
+
+## Push without Google (UnifiedPush) — works in every build
+
+Settings → Push → **Wake-ups without Google**. You need a UnifiedPush distributor app on the phone; [ntfy](https://ntfy.sh/app) is the usual one
+(Google Play, F-Droid or the ntfy.sh site; the public ntfy.sh server is fine because the wake carries no session data). Tap *Set up*, pick the
+distributor, and the app registers the URL it is given with every PC that lists the `unifiedpush` feature (`push.register {provider:"unifiedpush"}`;
+a PC gets one registration per phone and drops it when the push server reports it gone). When an approval or "done" alert appears and the phone is
+not connected, the PC POSTs `{"w":"1","h":"<hostId>"}`; `UnifiedPushService` wakes, connects briefly, reads `attention.list` and posts local
+notifications, exactly like the FCM path. Turning it off unregisters from the PCs. If FCM is also available, UnifiedPush wins while it is on.
+The connector library is pinned to 3.0.10 because 3.1+ need a Kotlin 2.2 compiler (see `gradle/libs.versions.toml`).
 
 ## Debug helpers
 

@@ -175,6 +175,15 @@ FCM data message to each push-registered device: `{"w":"1","h":"<hostId>"}` and 
 connects, calls `attention.list`, and builds local notifications from the decrypted items. The bridge sends FCM
 directly (HTTP v1 with a service account in its config). The relay needs no push secrets.
 
+**UnifiedPush (no Google).** A phone can instead register with `push.register {provider:"unifiedpush", endpoint}`, where
+`endpoint` is the https URL its distributor app (for example ntfy) gave it; `push.unregister {}` removes any registration.
+The bridge POSTs the same content-free body `{"w":"1","h":"<hostId>"}` to the endpoint (headers `TTL: 60`, `Urgency: high`).
+A `404`/`410` answer drops the registration; other failures are retried on the next wake. Because the URL comes from a phone,
+the bridge accepts only `https` URLs with no credentials or fragment, never `localhost`, `*.local`/`.lan`/`.internal`, or a
+loopback, private, link-local or CGNAT address, re-checks every address the name resolves to before each send, follows no
+redirects and times out after 10 s. A bridge advertises `"unifiedpush"` in `HostInfo.features`. Wakes are rate-limited to one
+per 5 s per bridge: a woken phone reads the whole attention list itself.
+
 ### 6.5 Uploads
 `upload.begin {name, mime, size, purpose}` → `{uploadId}`; `upload.chunk {uploadId, i, d}` (base64, ≤192 KiB raw);
 `upload.end {uploadId}` → `{ref, path?}`. `purpose:"image"` yields a `ref` for prompt attachments (bridge converts
@@ -218,6 +227,61 @@ process on the same session file (omp cannot change it live) and answers `busy` 
 `sessions.stop` is only for managed sessions (`readonly` otherwise). `devices.revoke` of the calling device still answers
 that request, then the device gets silence.
 
+### 6.9 Peer sync and moving a session to another PC
+A bridge with a configured `peer` (bridge README, "Peer sync") lists `"peer-sync"` in `HostInfo.features`; without one the
+op answers `unsupported` and the app hides the feature. `peer.sync {}` runs one sync with that peer now and answers
+`{pushedSessions, pulledSessions, pushedProjects, pulledProjects, durationMs}` (counts). The run is guaranteed to **start
+after** the request arrived (a run already in flight is awaited first, because it may have checked session leases before the
+caller released a session), so a caller that just stopped a session gets that session considered. A sync can take minutes:
+the bridge answers after at most 15 min with `timeout` (the sync itself carries on), and a failure answers `internal` with one
+readable line (`sync with the peer failed: …`), never a stack. The app waits up to 300 s.
+
+"Continue on another PC" is app-side orchestration of existing ops, in this order: (1) read `host.info` of both PCs and pick
+the one that lists `peer-sync` (the destination if both do; if neither does, stop with an explanation **before** anything is
+touched); (2) `sessions.stop {sid}` on the source (a running session holds a lease and syncs skip held sessions; a `not_found`
+answer counts as already stopped); (3) `peer.sync` on the chosen PC; (4) `sessions.open {sessionFile}` on the destination, using
+the `sessionFile` of the source's `SessionSummary`, so both PCs need the same session directory layout. TUI sessions
+cannot be stopped from the phone, so the app refuses them.
+
+Backups are not wire-visible: with `backup` configured the bridge keeps daily hard-linked snapshots of the sessions and blobs
+folders on a local disk (bridge README, "Backups") and reports the last run in `ompr status`.
+
+### 6.10 Account usage, file reading and git
+Each op is optional and advertised in `HostInfo.features` (`"usage"`, `"files"`, `"git"`); the app hides what the connected host
+does not list (older bridges send no `features`). A bridge lists `"files"` always, `"git"` when `git --version` works, and
+`"usage"` when `omp usage --help` exits 0 (probed once at startup).
+
+- `usage.get {}` → `{generatedAt, accounts:[{provider, email?, org?, limits:[{id, label, status, usedFraction, resetsAt}]}]}`.
+  The bridge runs `omp usage --json` (60 s timeout) and normalises it: one account per report plus the accounts omp lists
+  without usage (empty `limits`). `usedFraction` is 0..1 (from `amount.usedFraction`, else `used/limit`, clamped) or `null` when
+  omp gives none (e.g. a USD-only "extra usage" meter); `resetsAt` is epoch ms (`window.resetsAt`) or `null`; `status` is omp's
+  word passed through (`ok`, `warning`, `exhausted`, …, `unknown` when absent). Results are cached 60 s and concurrent calls
+  share one run. Failures are readable one-liners: `unsupported` (omp binary cannot be run), `timeout`, `internal` (non-zero
+  exit or output that is not JSON). The reply contains account e-mails: treat it like the rest of the session data.
+- `fs.read {path, maxBytes?}` → `{path, size, truncated, binary, text?}`. `path` is `realpath`-resolved and must stay under a
+  root (`forbidden_path`, also for symlinks that leave the roots and for missing files); only regular files are read
+  (`invalid` otherwise). `maxBytes` defaults to 128 KiB and is capped at 256 KiB. A file with a NUL byte in its first 8 KiB or
+  invalid UTF-8 answers `binary: true` and no `text`. `text` is cut at a character boundary, and further when its JSON encoding
+  would not fit one frame (control characters expand six-fold), setting `truncated`. `path` in the reply is the resolved path.
+- `git.status {path}` → `{root, branch, files:[{path, status}], truncated?}`. `path` is a directory under a root. `root` is the
+  work-tree top level (`rev-parse --show-toplevel`) and must itself be under a root (`forbidden_path` otherwise); a directory
+  outside any repository answers `invalid` with the message `not a git repository`. `files[].path` is relative to `root`,
+  `status` is the two-character `--porcelain=v1` code (` M`, `A `, `??`, `R `, …; for renames only the new path is given).
+  `branch` is `null` for a detached HEAD. Output beyond 200 KiB is cut (`truncated: true`, a cut record is dropped).
+- `git.diff {path, file?, staged?}` → `{diff, truncated}`: `git diff` of the work tree (or `--cached` with `staged: true`),
+  limited to `file` when given. `file` is relative to the repository root as `git.status` reports it (an absolute path inside
+  the repository is accepted); it is a literal path (no globs or pathspec magic) and must stay inside the root, also across
+  symlinks (`forbidden_path`; `invalid` for `.`/empty). The diff is capped at 200 KiB and cut further to fit a frame
+  (`truncated: true`). Untracked files have no diff: read them with `fs.read`. Submodules are not descended into.
+
+Git is run with `execFile` and fixed argv (never a shell), `cwd` = the validated directory (the repository root for
+`git.diff`), a scrubbed environment (`PATH`, `HOME`, `LC_ALL=C`, `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`,
+`GIT_LITERAL_PATHSPECS=1`), `-c core.fsmonitor=false -c core.pager=cat -c color.ui=never --no-pager`, `--no-ext-diff
+--no-textconv`, `--ignore-submodules=all`, `--` before paths and a 15 s timeout. Because git also runs a repository's
+`filter.<name>.clean/smudge/process` programs to compare the work tree with the index, every such filter defined in the
+repository's own (local or work-tree) config is switched off for the call; filters from the user's global config (git-lfs) stay.
+A hostile repository config therefore cannot make `git.status` / `git.diff` run a program.
+
 ## 7. Bridge behaviours (non-wire)
 - Refuse to run as root. All state under `~/.config/ompr/` (`0700`, files `0600`).
 - `inhibitSleepWhileWorking` (default true): hold `systemd-inhibit --what=sleep:idle` while any managed session is
@@ -225,7 +289,7 @@ that request, then the device gets silence.
 - Never log plaintext frames, keys or the pairing token.
 - Managed sessions start with the approval mode the app chose (`always-ask` default in the UI; omp's own
   default is `yolo`, which prompts for nothing).
-- `ompr` CLI: `init`, `pair [--no-confirm]`, `devices`, `revoke <did>`, `status`, `run`, `install-service`, `doctor`.
+- `ompr` CLI: `init`, `pair [--no-confirm]`, `devices`, `revoke <did>`, `status`, `run`, `install-service`, `sync`, `backup`, `doctor`.
 - The CLI talks to the running daemon over a unix socket `ctl.sock` (0600, newline-delimited JSON; not part of the wire protocol).
   Pairing tokens exist only in the daemon's memory, so `ompr pair` requires `ompr run`.
 - Embedded relay: `127.0.0.1:localPort` (default 7466) and, with `lan:true`, `0.0.0.0:lanPort` (default 7470). They are separate

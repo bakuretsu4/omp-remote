@@ -14,6 +14,7 @@ import { DeviceStore } from "./devices.ts";
 import { createIdentity, loadIdentity } from "./identity.ts";
 import { loadServiceAccount } from "./push.ts";
 import { auditStateModes, resolveRoots } from "./safefs.ts";
+import { Backup } from "./backup.ts";
 import { PeerSync } from "./sync.ts";
 
 const USAGE = `ompr ${BRIDGE_VERSION} — control omp sessions from your phone
@@ -27,6 +28,7 @@ usage: ompr <command>
   run                            run the bridge daemon (embedded relay, sessions, TUI attach)
   install-service                write ~/.config/systemd/user/ompr.service
   sync                           mirror sessions + project folders with the configured \`peer\` now, then exit
+  backup                         copy sessions + blobs into today's snapshot under the configured \`backup.dir\` now, then exit
   doctor                         check omp, relays, FCM, paths
 
 State lives in $OMPR_HOME or ~/.config/ompr.`;
@@ -223,7 +225,17 @@ async function cmdStatus(dir: string): Promise<void> {
 	console.log(`host:    ${st.hostId} "${st.name}"`);
 	for (const r of st.relays as { url: string; connected: boolean }[]) console.log(`relay:   ${r.connected ? "up  " : "DOWN"} ${r.url}`);
 	console.log(`phones:  ${(st.connected as unknown[]).length} connected / ${st.devices} paired`);
-	console.log(`push:    ${st.push ? "FCM configured" : "off"}`);
+	const reg = (st.pushRegistrations ?? { fcm: 0, unifiedpush: 0 }) as { fcm: number; unifiedpush: number };
+	const fcmNote = st.push ? `FCM configured (${reg.fcm} device(s))` : reg.fcm > 0 ? `FCM off: ${reg.fcm} token(s) registered but no service account` : "FCM off";
+	console.log(`push:    ${fcmNote}; UnifiedPush ready (${reg.unifiedpush} device(s))`);
+	const peer = st.peer as { ssh: string; last: { ok: boolean; durationMs: number; error?: string } | null } | null;
+	if (peer) console.log(`peer:    ${peer.ssh}${peer.last ? (peer.last.ok ? `, last sync ok (${(peer.last.durationMs / 1000).toFixed(1)}s)` : `, last sync FAILED: ${peer.last.error ?? "unknown error"}`) : ", no sync finished yet"}`);
+	const backup = st.backup as { dir: string; keep: number; disabled: string | null; last: { ok: boolean; at: number; snapshot?: string; error?: string } | null } | null;
+	if (backup) {
+		const last = backup.last;
+		const when = last ? `, last run ${new Date(last.at).toLocaleString()}` : ", no run finished yet";
+		console.log(`backup:  ${backup.dir} (keep ${backup.keep}) ${backup.disabled ? `DISABLED: ${backup.disabled}` : last ? (last.ok ? `ok, snapshot ${last.snapshot ?? "?"}${when}` : `FAILED: ${last.error ?? "unknown error"}${when}`) : "starting"}`);
+	}
 	console.log(`tui:     ${st.tuiControl === "control" ? "CONTROL (phone can drive live TUI sessions)" : st.tuiControl === "view-only" ? "view-only (tui.control=false)" : "off"}`);
 	console.log(`approval modes the phone may use: ${(st.allowedApprovalModes as string[]).join(", ")}`);
 	const sessions = st.sessions as { sid: string; kind: string; status: string; title: string }[];
@@ -374,6 +386,27 @@ async function cmdSync(dir: string): Promise<void> {
 	console.log(`sessions: pushed ${r.pushedSessions.length}, pulled ${r.pulledSessions.length}; projects: pushed ${r.pushedProjects.length}, pulled ${r.pulledProjects.length}; ${(r.durationMs / 1000).toFixed(1)}s`);
 }
 
+async function cmdBackup(dir: string): Promise<void> {
+	const cfg = loadConfig(dir);
+	if (!cfg.backup) {
+		console.error('ompr: no backup configured; add {"backup": {"dir": "/absolute/path/to/an/existing/folder"}} to config.json');
+		process.exit(1);
+	}
+	const sessionsDir = ompSessionsDir(cfg);
+	const backup = new Backup({ config: cfg.backup, sessionsDir, blobsDir: join(dirname(sessionsDir), "blobs"), log: m => console.log(m) });
+	const refusal = await backup.check();
+	if ("refusal" in refusal) {
+		console.error(`ompr: backup refused: ${refusal.refusal}`);
+		process.exit(1);
+	}
+	const r = await backup.runNow();
+	if (!r.ok) {
+		console.error(`ompr: backup failed: ${r.error ?? "unknown error"}`);
+		process.exit(1);
+	}
+	console.log(`snapshot ${r.snapshot} written to ${cfg.backup.dir}${r.pruned.length ? `; pruned ${r.pruned.join(", ")}` : ""}; ${(r.durationMs / 1000).toFixed(1)}s`);
+}
+
 async function main(): Promise<void> {
 	const [cmd, ...rest] = process.argv.slice(2);
 	if (!cmd || cmd === "-h" || cmd === "--help" || cmd === "help") {
@@ -404,6 +437,8 @@ async function main(): Promise<void> {
 			return cmdInstallService();
 		case "sync":
 			return cmdSync(dir);
+		case "backup":
+			return cmdBackup(dir);
 		case "doctor":
 			return cmdDoctor(dir);
 		default:

@@ -44,5 +44,10 @@ class OmprApp : Application() {
                 graph.connections.onPushTokenChanged()
             }
         }
+        // UnifiedPush asks apps to register again from time to time so the distributor still knows them (no-op when off).
+        graph.scope.launch {
+            graph.awaitReady()
+            graph.unifiedPush.refresh()
+        }
     }
 }
