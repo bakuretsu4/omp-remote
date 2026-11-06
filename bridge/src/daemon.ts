@@ -284,7 +284,7 @@ export class BridgeDaemon {
 				send: payload => {
 					conn.send(peer, payload);
 				},
-				onPair: payload => this.pairing.handle(payload),
+				onPair: (payload, canDeliver) => this.pairing.handle(payload, canDeliver),
 				nonces: this.#nonces,
 				counters: countersFor(peer),
 				onOpen: c => {

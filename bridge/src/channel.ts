@@ -98,8 +98,11 @@ export interface ChannelOptions {
 	hostInfo: () => HostInfo;
 	/** Writes one raw frame payload to the relay peer. */
 	send: (payload: Buffer) => void;
-	/** PAIR frames are handled by the pairing manager; resolve to the reply payload, or null for silence. */
-	onPair: (payload: Buffer) => Promise<Buffer | null>;
+	/**
+	 * PAIR frames are handled by the pairing manager; resolve to the reply payload, or null for silence.
+	 * `canDeliver` is true while this channel can still send the reply.
+	 */
+	onPair: (payload: Buffer, canDeliver: () => boolean) => Promise<Buffer | null>;
 	onOpen: (ch: Channel) => void;
 	onMessage: (ch: Channel, msg: AppToBridge) => void;
 	/** Fired once: the channel was closed, blocked, or timed out. */
@@ -259,7 +262,7 @@ export class Channel {
 			this.#block("too many pairing attempts");
 			return;
 		}
-		this.#o.onPair(payload).then(
+		this.#o.onPair(payload, () => this.state !== "closed" && this.state !== "blocked").then(
 			reply => {
 				if (reply && this.state !== "closed" && this.state !== "blocked") this.#o.send(reply);
 			},

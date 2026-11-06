@@ -114,8 +114,13 @@ export class PairingManager {
 		if (reason !== "paired") tok.opts.onDenied?.(reason);
 	}
 
-	/** Handles one PAIR frame payload. Resolves to the reply frame payload, or null for silence. */
-	async handle(payload: Buffer): Promise<Buffer | null> {
+	/**
+	 * Handles one PAIR frame payload. Resolves to the reply frame payload, or null for silence.
+	 * `canDeliver` reports whether the channel the reply would go out on is still usable: the device is only saved
+	 * (and the token burned as paired) if it is, so a phone that dropped while the human was deciding is never left
+	 * as a device the PC knows and the phone does not.
+	 */
+	async handle(payload: Buffer, canDeliver: () => boolean = () => true): Promise<Buffer | null> {
 		if (payload[0] !== FRAME_PAIR || this.#active.size === 0) return null;
 		const sealed = payload.subarray(1);
 		let tok: ActiveToken | undefined;
@@ -157,6 +162,11 @@ export class PairingManager {
 			}
 			if (!this.#active.has(tok)) return null; // expired or cancelled while asking
 			if (!ok) return this.#finish(tok, { t: "pair-no", reason: "denied" });
+		}
+		if (!canDeliver()) {
+			shared.fill(0);
+			this.#drop(tok, "the phone disconnected before pairing finished, so nothing was saved; run `ompr pair` again");
+			return null;
 		}
 
 		const did = this.#o.random?.did?.() ?? randomBytes(8);

@@ -193,7 +193,9 @@ async function cmdDevices(dir: string): Promise<void> {
 	}
 	for (const d of rows) {
 		const last = d.lastSeen ? new Date(d.lastSeen).toLocaleString() : "never";
-		console.log(`${d.did}  ${d.label.padEnd(20)}  last seen ${last}${d.connected ? "  [connected]" : ""}${d.push ? "  [push]" : ""}${d.revoked ? "  [REVOKED]" : ""}`);
+		// `add()` sets lastSeen = createdAt; the first authenticated connect moves it, so equality means the phone never connected.
+		const unseen = !d.revoked && d.lastSeen <= d.createdAt;
+		console.log(`${d.did}  ${d.label.padEnd(20)}  last seen ${last}${d.connected ? "  [connected]" : ""}${unseen ? "  [never connected: revoke it if the app does not list this PC]" : ""}${d.push ? "  [push]" : ""}${d.revoked ? "  [REVOKED]" : ""}`);
 	}
 }
 

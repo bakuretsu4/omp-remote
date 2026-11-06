@@ -52,14 +52,14 @@ Verified on real hardware (Pixel 7) and an emulator, against real omp:
 - attaching to a live TUI session and prompting it from the phone;
 - the Cloudflare Worker, deployed and contract-tested over real TLS.
 
-Tests: bridge 209, relay 24, Android 51, plus shared crypto vectors that every client must reproduce.
+Tests: bridge 212, relay 24, Android 51, plus shared crypto vectors that every client must reproduce.
 
 **Peer sync** (`peer` in the bridge config, `ompr sync`) mirrors sessions, image blobs and project folders to an always-on second PC over SSH + rsync, so a session can be continued from the phone while the main PC is off.
 The planner and the project-folder guard are unit-tested. A live run against a second machine pushed 74 real sessions (254 transcripts, 10,118 blobs, identical counts on both sides) and the next run was incremental.
 Verified end to end with real omp and a Pixel 7: a session started on the main PC was synced, continued on the second machine with its own login, continued again from the phone (connected to the second machine), and synced back, with identical transcripts on both machines at each step.
 Details and rules: [`bridge/README.md`](bridge/README.md#peer-sync-keep-working-while-this-pc-is-off).
 
-**Known issue (pairing):** if the phone's relay connection drops while it waits for you to approve on the PC, the PC still records the device but the app never saves the PC. Symptom: `ompr devices` lists a phone the app does not show. Fix: `ompr revoke <id>` that entry and pair again, approving promptly with the app in the foreground.
+**Pairing:** if the phone's connection drops while it waits for you to approve on the PC, nothing is saved and `ompr pair` says so; pair again. A device that was saved but never connected shows as `[never connected]` in `ompr devices` and can be removed with `ompr revoke <id>`. The cause of the dropped connection itself was not found (the relay has no short idle timeout and the app pings every 20 s); backgrounding the app during the wait is the likeliest, so keep it in the foreground until it finishes.
 
 **Phone-as-agent-tools** (location, clipboard, notifications, camera; every tool Off until the user enables it) work end to end on a Pixel 7 against real omp: the agent sent a
 notification, read a real location fix, wrote and read back the clipboard, and received and described a camera photo. A call that arrives while the app is closed posts a notification that

@@ -86,6 +86,10 @@ after 1.5 s.
    `{"t":"pair-ok","did":"<b64url 8B device id>","hostId":"…","name":"<host name>"}` (or `{"t":"pair-no","reason":"…"}`).
 5. Both derive `K_dev = HKDF(ikm=ECDH(D.priv, bpk), salt=pt, info="ompr/v1/device", L=32)`. They then discard `pt`.
    The bridge stores `{did, label, dpk, K_dev, createdAt, lastSeen, revoked:false, push?}`.
+   The bridge MUST check that the relay peer that sent the `pair-req` is still connected after the human has decided and
+   before it stores the device. If the peer is gone it stores nothing, burns the token and reports the reason to `ompr pair`
+   (the user runs `ompr pair` again). A device whose `lastSeen` still equals `createdAt` has never completed a HELLO + request
+   and is shown by `ompr devices` as "never connected".
 6. The app stores `{hostId, name, roomId, bpk, did, K_dev, relays[]}`. `K_dev` is wrapped by an Android Keystore key.
 
 ## 5. Connection handshake (every connect)
