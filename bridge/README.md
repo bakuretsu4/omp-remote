@@ -116,7 +116,9 @@ Rules the sync follows:
   is not a root itself (`~`, `/tmp`) and has no dot-directory component (`.ssh`, `.config`, `.omp`, ...). `.git` is mirrored
   as plain files, so commit/push from one machine at a time.
 - The peer needs `rsync`, `python3`, `omp` and the same absolute path for `~` (session headers store absolute `cwd`).
-- Login is **not** synced. Sign in on the peer separately (`omp auth-broker login --via=user@peer anthropic`, or `/login` there).
+- Login is **not** synced. Sign in on the peer separately: run `ssh -tt peer '~/.local/bin/omp auth-broker login anthropic'`, open the URL it prints,
+  approve, and paste the address of the page that fails to load (`http://localhost:54545/callback?code=...`) into the waiting prompt. This needs no port
+  forwarding, so it works when the peer's sshd has `AllowTcpForwarding no`; `login --via=user@peer` does need forwarding, and a non-interactive ssh may not have `omp` on `PATH`.
   Copying the vault would let two machines refresh the same OAuth token and invalidate each other.
 
 ### Attaching TUI sessions

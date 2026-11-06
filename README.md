@@ -56,7 +56,10 @@ Tests: bridge 209, relay 24, Android 51, plus shared crypto vectors that every c
 
 **Peer sync** (`peer` in the bridge config, `ompr sync`) mirrors sessions, image blobs and project folders to an always-on second PC over SSH + rsync, so a session can be continued from the phone while the main PC is off.
 The planner and the project-folder guard are unit-tested. A live run against a second machine pushed 74 real sessions (254 transcripts, 10,118 blobs, identical counts on both sides) and the next run was incremental.
-Opening a mirrored session on the second machine from the phone has not been tried yet: that machine still needs its own omp login. Details and rules: [`bridge/README.md`](bridge/README.md#peer-sync-keep-working-while-this-pc-is-off).
+Verified end to end with real omp and a Pixel 7: a session started on the main PC was synced, continued on the second machine with its own login, continued again from the phone (connected to the second machine), and synced back, with identical transcripts on both machines at each step.
+Details and rules: [`bridge/README.md`](bridge/README.md#peer-sync-keep-working-while-this-pc-is-off).
+
+**Known issue (pairing):** if the phone's relay connection drops while it waits for you to approve on the PC, the PC still records the device but the app never saves the PC. Symptom: `ompr devices` lists a phone the app does not show. Fix: `ompr revoke <id>` that entry and pair again, approving promptly with the app in the foreground.
 
 **Phone-as-agent-tools** (location, clipboard, notifications, camera; every tool Off until the user enables it) work end to end on a Pixel 7 against real omp: the agent sent a
 notification, read a real location fix, wrote and read back the clipboard, and received and described a camera photo. A call that arrives while the app is closed posts a notification that
