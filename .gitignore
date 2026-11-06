@@ -12,3 +12,6 @@ local.properties
 google-services.json
 firebase-service-account*.json
 .DS_Store
+
+# Release signing secrets: never commit
+keystore.properties

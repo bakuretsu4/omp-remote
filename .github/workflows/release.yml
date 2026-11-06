@@ -1,0 +1,68 @@
+name: Release
+
+# Push a tag like v0.2.0 to build, sign, verify and publish the Android APK as a GitHub Release.
+# Needs these repository secrets (see android/README.md, "Releasing"):
+#   OMPR_KEYSTORE_BASE64, OMPR_KEYSTORE_PASSWORD, OMPR_KEY_ALIAS, OMPR_KEY_PASSWORD
+# Optional repository variable OMPR_CERT_SHA256: the expected signing certificate fingerprint; a mismatch aborts the release.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the signed release APK
+        working-directory: android
+        env:
+          KEYSTORE_B64: ${{ secrets.OMPR_KEYSTORE_BASE64 }}
+          OMPR_KEYSTORE_PASSWORD: ${{ secrets.OMPR_KEYSTORE_PASSWORD }}
+          OMPR_KEY_ALIAS: ${{ secrets.OMPR_KEY_ALIAS }}
+          OMPR_KEY_PASSWORD: ${{ secrets.OMPR_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for v in KEYSTORE_B64 OMPR_KEYSTORE_PASSWORD OMPR_KEY_ALIAS OMPR_KEY_PASSWORD; do
+            [ -n "${!v}" ] || { echo "::error::repository secret for $v is not set"; exit 1; }
+          done
+          export OMPR_KEYSTORE_FILE="$RUNNER_TEMP/ompr-release.jks"
+          echo "$KEYSTORE_B64" | base64 -d > "$OMPR_KEYSTORE_FILE"
+          export OMPR_VERSION="${GITHUB_REF_NAME#v}"
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease
+          rm -f "$OMPR_KEYSTORE_FILE"
+
+      - name: Verify the signature and stage the artifacts
+        env:
+          EXPECTED_SHA256: ${{ vars.OMPR_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
+          SRC=android/app/build/outputs/apk/release/app-release.apk
+          [ -f "$SRC" ] || { echo "::error::no signed APK at $SRC (the build produced an unsigned one?)"; ls android/app/build/outputs/apk/release; exit 1; }
+          "$APKSIGNER" verify --verbose --print-certs "$SRC" | tee verify.txt
+          if [ -n "${EXPECTED_SHA256:-}" ]; then
+            got="$(grep -m1 'certificate SHA-256 digest' verify.txt | sed 's/.*: //' | tr -d ':' | tr 'A-F' 'a-f')"
+            want="$(echo "$EXPECTED_SHA256" | tr -d ':' | tr 'A-F' 'a-f')"
+            [ "$got" = "$want" ] || { echo "::error::signing certificate $got does not match OMPR_CERT_SHA256 $want"; exit 1; }
+          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir dist
+          cp "$SRC" "dist/omp-remote-$VERSION.apk"
+          (cd dist && sha256sum "omp-remote-$VERSION.apk" > "omp-remote-$VERSION.apk.sha256")
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "OMP Remote ${GITHUB_REF_NAME#v}"

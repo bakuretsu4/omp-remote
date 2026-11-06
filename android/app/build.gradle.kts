@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -11,6 +13,25 @@ if (pushEnabled) {
     apply(plugin = "com.google.gms.google-services")
 }
 
+// Release signing. Values come from the environment (CI) or from android/keystore.properties (local, git-ignored):
+//   storeFile, storePassword, keyAlias, keyPassword   /   OMPR_KEYSTORE_FILE, OMPR_KEYSTORE_PASSWORD, OMPR_KEY_ALIAS, OMPR_KEY_PASSWORD
+// With any of them missing, `assembleRelease` produces an unsigned APK instead of failing.
+val signingProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signingValue(prop: String, env: String): String? = System.getenv(env)?.takeIf { it.isNotBlank() } ?: signingProps.getProperty(prop)
+val releaseStoreFile = signingValue("storeFile", "OMPR_KEYSTORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "OMPR_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "OMPR_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "OMPR_KEY_PASSWORD")
+val hasReleaseSigning = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { it != null }
+
+// The version comes from the release tag (OMPR_VERSION=0.2.0). versionCode = major*10000 + minor*100 + patch.
+val appVersion = System.getenv("OMPR_VERSION")?.takeIf { it.isNotBlank() } ?: "0.1.0"
+require(Regex("""\d{1,3}\.\d{1,2}\.\d{1,2}""").matches(appVersion)) { "OMPR_VERSION must look like 1.2.3 (got '$appVersion')" }
+val appVersionCode = appVersion.split(".").map { it.toInt() }.let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
+
 android {
     namespace = "app.ompr"
     compileSdk = 35
@@ -19,9 +40,20 @@ android {
         applicationId = "app.ompr"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersion
         buildConfigField("boolean", "PUSH_ENABLED", pushEnabled.toString())
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -32,6 +64,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
+            // `-PomprAppIdSuffix=.rc` installs a release build next to the real app (separate data), for testing a release build safely.
+            (project.findProperty("omprAppIdSuffix") as String?)?.let { applicationIdSuffix = it }
         }
     }
 

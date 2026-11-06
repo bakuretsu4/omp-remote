@@ -5,3 +5,4 @@ local.properties
 .idea/
 captures/
 app/google-services.json
+keystore.properties
