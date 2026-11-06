@@ -16,17 +16,26 @@ export function hkdf(ikm: Uint8Array, salt: Uint8Array | string, info: string, l
 	return Buffer.from(hkdfSync("sha256", ikm, salt, info, length));
 }
 
+/**
+ * Left-pads a big-endian scalar to 32 bytes. Node's `ECDH.getPrivateKey()` drops leading zero bytes, so about one P-256
+ * private key in 256 comes back as 31 bytes (or fewer), which the 32-byte identity and wire formats then reject.
+ */
+export function fixed32(b: Uint8Array): Buffer {
+	if (b.length > 32) throw new Error("scalar is longer than 32 bytes");
+	return Buffer.concat([Buffer.alloc(32 - b.length), b]);
+}
+
 /** P-256 keypair as raw bytes: 32-byte private scalar, 65-byte uncompressed public point. */
 export function generateKeypair(): { priv: Buffer; pub: Buffer } {
 	const e = createECDH("prime256v1");
 	e.generateKeys();
-	return { priv: e.getPrivateKey(), pub: e.getPublicKey(null, "uncompressed") };
+	return { priv: fixed32(e.getPrivateKey()), pub: e.getPublicKey(null, "uncompressed") };
 }
 
 export function keypairFromPrivate(priv: Uint8Array): { priv: Buffer; pub: Buffer } {
 	const e = createECDH("prime256v1");
 	e.setPrivateKey(Buffer.from(priv));
-	return { priv: Buffer.from(priv), pub: e.getPublicKey(null, "uncompressed") };
+	return { priv: fixed32(priv), pub: e.getPublicKey(null, "uncompressed") };
 }
 
 /** 32-byte X coordinate of the shared point. */
