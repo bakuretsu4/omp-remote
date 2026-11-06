@@ -98,6 +98,7 @@ export class BridgeDaemon {
 	readonly #createPeerSync: (deps: PeerSyncDeps) => PeerSyncLike;
 	#hostTools!: HostToolRouter;
 	#stopped = false;
+	#ownsControlSocket = false;
 
 	constructor(o: DaemonOptions) {
 		this.dir = o.dir;
@@ -422,6 +423,7 @@ export class BridgeDaemon {
 			process.umask(oldMask);
 		}
 		server.off("error", reject);
+		this.#ownsControlSocket = true;
 		chmodSync(sock, 0o600);
 	}
 
@@ -546,10 +548,14 @@ export class BridgeDaemon {
 		clearInterval(this.#tick);
 		const sock = paths(this.dir).ctl;
 		this.#ctl?.close();
-		try {
-			unlinkSync(sock);
-		} catch {
-			// already gone
+		// Only the instance that bound the socket may remove it: a second `ompr run` that fails because a daemon is
+		// already running also calls stop(), and must not delete the running daemon's socket path.
+		if (this.#ownsControlSocket) {
+			try {
+				unlinkSync(sock);
+			} catch {
+				// already gone
+			}
 		}
 		await this.#discovery?.stop().catch(() => {});
 		await this.registry?.closeAll();
